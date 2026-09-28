@@ -2,6 +2,7 @@ let isEditingFileName = false;
 
 const $compareDumpsButton = $('#compareDumpsButton')
 const $editDumpButton = $('#editDumpButton')
+const $writeDumpButton = $('#writeDumpButton')
 
 window["electronAPI"].onCreateDumpHistoryWindow((_event, dumps) => {
     const $dumpsList = $('#dumpsList');
@@ -83,6 +84,14 @@ $compareDumpsButton.click(() => {
     }
 });
 
+$writeDumpButton.click(() => {
+    const $selectedDump = $('#dumpsList .selected');
+    if ($selectedDump.length) {
+        const dumpId = $selectedDump.text();
+        window["electronAPI"].execAction('write-IC', dumpId);
+    }
+});
+
 $('#deleteSelectedButton').click(() => {
     const $selectedDumps = $('#dumpsList .selected');
     window["electronAPI"].execAction('delete-dump', $selectedDumps.map((_, dump) => $(dump).text()).toArray());
@@ -92,12 +101,15 @@ function updateBottomButtonStatus() {
     const $selectedDumps = $('#dumpsList .selected');
     if ($selectedDumps.length === 1) {
         $editDumpButton.prop('disabled', false);
+        $writeDumpButton.prop('disabled', false);
         $compareDumpsButton.prop('disabled', true);
     } else if ($selectedDumps.length === 2) {
         $editDumpButton.prop('disabled', true);
+        $writeDumpButton.prop('disabled', true);
         $compareDumpsButton.prop('disabled', false);
     } else {
         $editDumpButton.prop('disabled', true);
+        $writeDumpButton.prop('disabled', true);
         $compareDumpsButton.prop('disabled', true);
     }
 }

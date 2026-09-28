@@ -100,20 +100,38 @@ const actions = {
     },
 
     // 一键写卡
-    "write-IC": () => {
+    "write-IC": (dumpId) => {
+        const startWrite = (mfdFilePath) => {
+            dialog.showMessageBox({
+                type: "warning",
+                buttons: [i18n("dialog_button_cancel"), i18n("dialog_button_ok")],
+                title: i18n("dialog_title_danger_operation"),
+                message: i18n("dialog_msg_confirm_write_dump")
+            }).then((response) => {
+                if (response.response !== 1) return
+                readICThenExec(
+                    i18n("log_msg_start_write_card"), i18n("indicator_writing_ic_card"), true,
+                    "nfc-mfclassic", ["w", "A", "u", mfdFilePath, tempMFDFilePath, "f"],
+                    (code) => {
+                        printLog(`\n\n${code === 0 ? i18n("log_msg_write_success") : i18n("log_msg_write_failed")}\n`)
+                    }
+                )
+            })
+        }
+
+        if (dumpId) {
+            startWrite(path.join(dumpsFolder, dumpId))
+            return
+        }
         dialog.showOpenDialog({
             title: i18n("dialog_title_choose_dump_need_to_write"),
             defaultPath: dumpFilesPath,
             buttonLabel: i18n("dialog_button_open"),
-            filters: [{ name: i18n("file_type_dump"), extensions: ['dump', 'mfd'] }]
+            filters: [{ name: i18n("file_type_dump"), extensions: ['dump', 'mfd'] }],
+            message: i18n("dialog_msg_choose_dump_file")
         }).then(result => {
             if (result["canceled"] === true) return
-            let mfdFilePath = result["filePaths"][0]
-
-            readICThenExec(
-                i18n("log_msg_start_write_card"), i18n("indicator_writing_ic_card"), true,
-                "nfc-mfclassic", ["w", "A", "u", mfdFilePath, tempMFDFilePath, "f"]
-            )
+            startWrite(result["filePaths"][0])
         })
     },
 
@@ -251,7 +269,7 @@ const actions = {
                                 throw err
                             }
                             else {
-                                printLog(  `\n\n${i18n("log_msg_already_saved_to")} ${url}\n`)
+                                printLog(  `\n\n${i18n("log_msg_file_already_saved_to")} ${url}\n`)
                                 printExitLog(0)
                             }
                         })
@@ -361,13 +379,25 @@ const actions = {
     "dump-editor-save": (data) => {
         const binaryArray = new Buffer.from(data.hexData, "hex")
 
-        fs.writeFile(data.url, binaryArray, (error) => {
-            if (error) {
-                throw error
-            } else {
-                sentToDumpEditorWindow('saved-binary-data');
-            }
-        });
+        const save = (url) => {
+            fs.writeFile(url, binaryArray, (error) => {
+                if (error) {
+                    throw error
+                } else {
+                    sentToDumpEditorWindow('saved-binary-data', {url})
+                }
+            })
+        }
+
+        if (data.saveAs) {
+            const url = dialog.showSaveDialogSync({
+                title: i18n("dialog_title_save_to"),
+                defaultPath: data.url,
+                filters: [{ name: i18n("file_type_dump"), extensions: ['dump', 'mfd'] }],
+                message: i18n("dialog_msg_choose_save_path")
+            })
+            if (url) save(url)
+        } else save(data.url)
     },
 
     // 转储比较器
@@ -489,7 +519,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
     newKeys = []
     knownKeyInfo = []
     unknownKeyInfo = []
-    printStatus(i18n("indicator_detecting_ic_card"))
+    printStatus(isSaveDumpFile ? i18n("indicator_backing_up_current_card") : i18n("indicator_detecting_ic_card"))
     exec(
         i18n("log_msg_read_ic_then_execute"),
         'nfc-mfdetect', isSaveDumpFile ? [`-O${tempMFDFilePath}`, `-f${knownKeysFile}`] : [`-N`, `-f${knownKeysFile}`],
@@ -503,6 +533,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
             printStatus(statusMsg)
             if (!isCmdFunc) {cmd(); return;}
             if (isSaveDumpFile && !fs.existsSync(tempMFDFilePath)) {
+                printLog(`\n${i18n("log_msg_card_read_failed")}\n`)
                 printExitLog(0)
                 return
             }
@@ -550,16 +581,30 @@ function mfoc(args) {
             saveKeys(newKeys)
             if (fs.statSync(tempMFDFilePath).size === 0) {
                 fs.unlink(tempMFDFilePath, (err) => {
-                    if(err) throw err;
+                    if (err) throw err
                 })
-            } else {
-                fs.mkdir(dumpsFolder, () => {
-                    fs.rename(tempMFDFilePath, `${dumpFilesPath}/${cardID}_${getTimeList().join("_")}.mfd`, (err) =>{
-                        if (err) throw err
-                    })
-                    cardID = null
-                })
+                printLog(`\n${i18n("log_msg_dump_empty_not_saved")}\n`)
+                return
             }
+            fs.mkdir(dumpsFolder, () => {
+                const defaultName = `${cardID || "card"}_${getTimeList().join("_")}.mfd`
+                const url = dialog.showSaveDialogSync({
+                    title: i18n("dialog_title_save_to"),
+                    defaultPath: path.join(dumpsFolder, defaultName),
+                    filters: [{ name: i18n("file_type_dump"), extensions: ['dump', 'mfd'] }],
+                    message: i18n("dialog_msg_choose_save_path")
+                })
+                const target = url || path.join(dumpsFolder, defaultName)
+                fs.rename(tempMFDFilePath, target, (err) => {
+                    if (err) {
+                        printLog(`\n\n${i18n("log_msh_save_failed")}\n`)
+                        printExitLog(1)
+                        return
+                    }
+                    if (url) printLog(`\n\n${i18n("log_msg_file_already_saved_to")} ${url}\n`)
+                    else printLog(`\n\n${i18n("log_msg_dump_auto_saved")} ${target}\n`)
+                })
+            })
         }
     ).then(()=>{printExitLog(0)}).catch(() => {})
 }

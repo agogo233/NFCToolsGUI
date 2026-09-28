@@ -1,5 +1,5 @@
 body {
-    margin-bottom: 90px;
+    margin-bottom: 140px;
     user-select: none;
 }
 
@@ -50,6 +50,7 @@ hr {
     left: 0;
     right: 0;
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
     z-index: 1;
     padding: 10px 0 20px;

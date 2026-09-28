@@ -12,6 +12,7 @@
   "indicator_doing_hard_nested": "正在执行 HardNested 解密",
   "indicator_testing_dictionary": "正在进行字典测试",
   "indicator_collecting_nonces": "正在收集 Nonces",
+  "indicator_backing_up_current_card": "正在备份当前卡",
 
   "dialog_title_error" : "出错",
   "dialog_title_device_busy": "设备忙",
@@ -30,6 +31,7 @@
   "dialog_msg_choose_dictionary_file": "请选择字典文件",
   "dialog_msg_choose_dump_file": "请选择转储文件",
   "dialog_msg_are_you_sure_to_delete_these_dumps": "你确定要删除这些转储文件吗？",
+  "dialog_msg_confirm_write_dump": "该操作将先备份当前卡内容，再把所选文件写入卡片\n确定继续吗？",
 
   "dialog_button_cancel" : "取消",
   "dialog_button_still_exit" : "仍然退出",
@@ -61,6 +63,11 @@
   "log_msg_start_connect_device": "开始连接设备",
   "log_msg_discover_device": "发现设备",
   "log_msg_not_found_device": "未发现设备!",
+  "log_msg_write_success": "写卡成功",
+  "log_msg_write_failed": "写卡失败",
+  "log_msg_dump_auto_saved": "解密结果已自动保存到",
+  "log_msg_dump_empty_not_saved": "未读到卡内容，未保存文件",
+  "log_msg_card_read_failed": "读卡失败，未执行操作",
 
   "html_tools": "工具",
   "html_settings": "设置",
@@ -101,6 +108,7 @@
   "html_current_file": "当前文件",
   "html_open_file": "打开文件",
   "html_save_file": "保存文件",
+  "html_save_as_file": "另存为",
   "html_caption": "图例",
   "html_uid_manufacture_info": "UID & 厂家信息",
   "html_key_a": "密钥 A",
@@ -110,6 +118,7 @@
   "html_compute_dump": "比较转储",
   "html_edit_dump": "编辑转储",
   "html_delete_checked": "删除选中",
+  "html_write_this_dump": "写入此卡",
   "html_please_input_known_keys_split_by_comma": "请输入已知的Key, 以英文半角逗号分隔",
   "html_auto_run": "自动执行",
   "html_known_info": "已知信息",

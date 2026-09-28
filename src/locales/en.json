@@ -12,6 +12,7 @@
   "indicator_doing_hard_nested": "Performing HardNested",
   "indicator_testing_dictionary": "Testing dictionary",
   "indicator_collecting_nonces": "Collecting Nonces",
+  "indicator_backing_up_current_card": "Backing up current card",
 
   "dialog_title_error": "Error",
   "dialog_title_device_busy": "Device Busy",
@@ -30,6 +31,7 @@
   "dialog_msg_choose_dictionary_file": "Please choose a dictionary file",
   "dialog_msg_choose_dump_file": "Please choose a dump file",
   "dialog_msg_are_you_sure_to_delete_these_dumps": "Are you sure you want to delete these dump files?",
+  "dialog_msg_confirm_write_dump": "This will back up the current card and then write the chosen file to it.\nAre you sure you want to continue?",
 
   "dialog_button_cancel": "Cancel",
   "dialog_button_still_exit": "Still Exit",
@@ -61,6 +63,11 @@
   "log_msg_start_connect_device": "Start Connecting Device",
   "log_msg_discover_device": "Device Discovered",
   "log_msg_not_found_device": "Device not found!",
+  "log_msg_write_success": "Card written successfully",
+  "log_msg_write_failed": "Failed to write card",
+  "log_msg_dump_auto_saved": "Decryption result auto-saved to",
+  "log_msg_dump_empty_not_saved": "No card content was read, nothing was saved",
+  "log_msg_card_read_failed": "Could not read the card, the operation was not performed",
 
   "html_tools": "Tools",
   "html_settings": "Settings",
@@ -101,6 +108,7 @@
   "html_current_file": "Current File",
   "html_open_file": "Open File",
   "html_save_file": "Save File",
+  "html_save_as_file": "Save As",
   "html_caption": "Caption",
   "html_uid_manufacture_info": "UID & ManufInfo",
   "html_key_a": "KeyA",
@@ -110,6 +118,7 @@
   "html_compute_dump": "Compare Dumps",
   "html_edit_dump": "Edit Dump",
   "html_delete_checked": "Delete Checked",
+  "html_write_this_dump": "Write this Dump",
   "html_please_input_known_keys_split_by_comma": "Please Enter Known Keys, Separated by Comma",
   "html_auto_run": "Auto Run",
   "html_known_info": "Known Information",

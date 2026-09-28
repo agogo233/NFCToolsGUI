@@ -11,13 +11,36 @@ $('#drag').on('dragstart', (e) => {
 
 // buttons
 $('#choose-file').click(() => {window['electronAPI'].execAction('dump-editor-choose-file')})
+const getHexData = () => $('.binary-input').map((i, el) => el.innerText).get().join('').replace(/\n/g, '')
 $('#save-file').click(() => {
+    if (!currentFilePath || !getHexData()) {
+        alert(i18n("html_data_format_wrong"))
+        return
+    }
     if (checkData(true)) {
         window['electronAPI'].execAction(
             'dump-editor-save',
             {
                 url: currentFilePath,
-                hexData:$('.binary-input').map((i, el) => el.innerText).get().join('').replace(/\n/g, '')
+                hexData: getHexData()
+            }
+        )
+    } else {
+        alert(i18n("html_data_format_wrong"))
+    }
+})
+$('#save-as-file').click(() => {
+    if (!currentFilePath || !getHexData()) {
+        alert(i18n("html_data_format_wrong"))
+        return
+    }
+    if (checkData(true)) {
+        window['electronAPI'].execAction(
+            'dump-editor-save',
+            {
+                url: currentFilePath,
+                saveAs: true,
+                hexData: getHexData()
             }
         )
     } else {
@@ -54,7 +77,11 @@ window['electronAPI'].onOpenDumpFile((event, data) => {
     })
 })
 
-window['electronAPI'].onSavedDumpFile(() => {
+window['electronAPI'].onSavedDumpFile((event, data) => {
+    if (data && data.url) {
+        currentFilePath = data.url
+        $('#current-file').text(data.url.split(/[\/\\]/g).pop())
+    }
     alert(i18n("html_save_success"))
 })
 

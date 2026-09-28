@@ -28,6 +28,11 @@ module.exports = {
             "dict.dic"
         ]
     },
+    rebuildConfig: {
+        // serialport ships Node-API prebuilds that @electron/rebuild cannot detect by
+        // name, forcing a node-gyp source rebuild that needs a Visual Studio toolchain
+        ignoreModules: ["@serialport/bindings-cpp"]
+    },
     makers: [
         {
             name: "@electron-forge/maker-zip",

@@ -104,6 +104,7 @@ echo
 echo
 echo "============================== mfoc =============================="
 cd "$source"/mfoc
+sed -i 's/int errno)/int err)/;s/exit(errno)/exit(err)/' src/*.c src/*.h  # 'errno' param shadows <errno.h> macro
 autoreconf -vis
 if [ "$os" = "MINGW64" ]; then
     LIBS=$prefix/lib/libnfc.a ./configure LDFLAGS=-L"$prefix"/lib CPPFLAGS=-I"$prefix"/include PKG_CONFIG=: prefix="$prefix"
@@ -119,6 +120,7 @@ echo
 echo
 echo "============================== nfc-mfdict =============================="
 cd "$source"/nfc-mfdict
+sed -i 's/int errno)/int err)/;s/exit(errno)/exit(err)/' src/*.c src/*.h  # 'errno' param shadows <errno.h> macro
 autoreconf -vis
 if [ "$os" = "MINGW64" ]; then
     LIBS=$prefix/lib/libnfc.a ./configure LDFLAGS=-L"$prefix"/lib CPPFLAGS=-I"$prefix"/include PKG_CONFIG=: prefix="$prefix"
@@ -133,6 +135,7 @@ echo
 echo
 echo "============================== nfc-mfdetect =============================="
 cd "$source"/nfc-mfdetect
+sed -i 's/int errno)/int err)/;s/exit(errno)/exit(err)/' src/*.c src/*.h  # 'errno' param shadows <errno.h> macro
 autoreconf -vis
 if [ "$os" = "MINGW64" ]; then
     LIBS=$prefix/lib/libnfc.a ./configure LDFLAGS=-L"$prefix"/lib CPPFLAGS=-I"$prefix"/include PKG_CONFIG=: prefix="$prefix"

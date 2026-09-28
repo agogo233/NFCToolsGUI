@@ -11,6 +11,7 @@ button {
     height: 34px;
     padding: 0;
     cursor: pointer;
+    vertical-align: middle;
     background-color: var(--color-surface-2);
     color: var(--color-text);
     box-shadow: var(--shadow-card);

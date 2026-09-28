@@ -281,7 +281,7 @@ select {
     font-size: var(--fs-base);
     border-top-right-radius: var(--radius-lg);
     vertical-align: bottom;
-    width: calc(100% - 42px);
+    width: calc(100% - 86px);
 }
 
 #bottom-bar {

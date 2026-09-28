@@ -8,14 +8,12 @@ body {
     font-size: var(--fs-lg);
     font-weight: 600;
     margin-top: var(--space-5);
-    margin-bottom: var(--space-3);
 }
 
 .sub-title {
     font-size: var(--fs-base);
     font-weight: 600;
-    margin-top: var(--space-4);
-    margin-bottom: var(--space-3);
+    margin-bottom: 10px;
 }
 
 .hr-edge-weak {
@@ -30,27 +28,26 @@ label:not(.radio-wrapper):not(.checkbox-wrapper) {
     display: inline-block;
     padding-right: 8px;
     width: 80px;
-    vertical-align: middle;
     text-align: right;
     white-space: nowrap;
     font-size: var(--fs-base);
+}
+
+input[type="text"] {
+    margin-top: 20px;
+    line-height: 16px;
+}
+
+button {
+    height: 40px;
+    margin-left: 15px;
+    margin-right: 10px;
 }
 
 #dict-file {
     display: inline-block;
     width: 200px;
     text-align: right;
-    vertical-align: middle;
-}
-
-#dict-file button {
-    margin-left: var(--space-2);
-}
-
-#dark-mode,
-#light-mode,
-#follow-system-mode {
-    margin-right: 10px;
 }
 
 .radio-group {
@@ -58,9 +55,12 @@ label:not(.radio-wrapper):not(.checkbox-wrapper) {
     display: inline-block;
     width: 200px;
     text-align: center;
+    white-space: nowrap;
     margin-right: 10px;
 }
 
 .final-button button {
-    margin: var(--space-5) 15px 0;
+    height: 30px;
+    margin-top: var(--space-5);
+    margin-right: 15px;
 }

@@ -38,6 +38,12 @@ fi
 workdir=$(pwd)
 prefix=$workdir/framework
 source=$workdir/source
+for f in vendor/libusb-0.1.12.zip vendor/craptev1-v1.1.tar.xz vendor/crapto1-v3.3.tar.xz; do
+    if [ ! -f "$workdir/$f" ]; then
+        echo "Missing vendored file: $f"
+        exit 1
+    fi
+done
 rm -rf "$prefix"
 mkdir "$prefix"
 mkdir "$prefix"/bin
@@ -64,8 +70,7 @@ elif [ "$os" = "Darwin" ]; then
     tar -xvf libusb-legacy-0.1.12_4.darwin_22.x86_64.tbz2
     mv ./opt/local/* "$prefix"/
 else
-    curl -LO https://pub-3d2f9df4304d45e38bbebe723816c4a3.r2.dev/libusb-0.1.12.zip
-    unzip -o libusb-0.1.12.zip
+    unzip -o "$workdir/vendor/libusb-0.1.12.zip"
     cd ./libusb-0.1.12
     ./configure prefix="$prefix"
     make && make install
@@ -160,11 +165,9 @@ echo
 echo
 echo "============================== libnfc_collect =============================="
 cd "$source"/libnfc_collect
-curl -LO https://pub-3d2f9df4304d45e38bbebe723816c4a3.r2.dev/craptev1-v1.1.tar.xz
-tar -xf craptev1-v1.1.tar.xz
+tar -xf "$workdir/vendor/craptev1-v1.1.tar.xz"
 mkdir -p crapto1-v3.3
-curl -LO https://pub-3d2f9df4304d45e38bbebe723816c4a3.r2.dev/crapto1-v3.3.tar.xz
-tar -xf crapto1-v3.3.tar.xz -C crapto1-v3.3
+tar -xf "$workdir/vendor/crapto1-v3.3.tar.xz" -C crapto1-v3.3
 autoreconf -vis
 if [ "$os" = "Darwin" ]; then
     ./configure LDFLAGS=-L"$prefix"/lib prefix="$prefix" CPPFLAGS=-I"$prefix"/include CFLAGS='-std=gnu99 -O3'

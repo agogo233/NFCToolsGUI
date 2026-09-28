@@ -1,0 +1,138 @@
+@font-face{
+    font-family: 'SourceCodePro';
+    src: url('../assets/font/SourceCodePro-Regular.ttf');
+    font-weight: normal;
+    font-style: normal;
+}
+
+:root {
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SourceCodePro", "SF Mono", Consolas, "Courier New", monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-pill: 999px;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 8%);
+    --shadow-card: 0 4px 12px rgb(65 104 207 / 18%);
+    --shadow-panel: 0 6px 16px rgb(0 0 0 / 12%);
+
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
+    --fs-md: 15px;
+    --fs-lg: 16px;
+    --fs-title: 20px;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+}
+
+:root {
+    --color-primary: #4168cf;
+    --color-primary-hover: #3c5eb3;
+    --color-primary-active: #34539f;
+    --color-text-inverse: #ffffff;
+    --color-selection-fg: #ffffff;
+
+    --color-bg: #f7f8fa;
+    --color-surface: #ffffff;
+    --color-surface-2: #f4f5fc;
+    --color-toolbar: #f7f8fa;
+    --color-text: #27282d;
+    --color-text-secondary: #6b6f76;
+    --color-border: #ebecf0;
+    --color-divider: #d0d0d5;
+
+    --color-selected: #d2def9;
+    --color-hover-overlay: #dddfe3;
+    --color-button-hover-bg: #4168cf;
+    --color-button-hover-text: #ffffff;
+    --color-disabled-bg: #e0e0e0;
+    --color-disabled-fg: #a0a0a0;
+
+    --color-input-border: #c7cad1;
+    --color-input-bg: #ffffff;
+    --color-focus-ring: rgb(65 104 207 / 22%);
+
+    --color-console-bg: #151728;
+    --color-console-fg: #54ad6c;
+    --color-danger: #eb7171;
+
+    --color-scrollbar: rgba(245, 245, 245, 0.3);
+    --color-scrollbar-button: #e5e5e5;
+    --color-scrollbar-thumb: #c2c2c2;
+    --color-scrollbar-thumb-hover: #a7a7a7;
+
+    --color-tooltip-bg: #27282d;
+    --color-tooltip-border: #ffffff;
+    --color-tooltip-fg: #ffffff;
+
+    --color-mark-bg: #ffd6d6;
+    --color-mark-fg: #000000;
+
+    --color-uid: #7742b8;
+    --color-keyA: #3f9142;
+    --color-keyB: #4d8027;
+    --color-access: #c2410c;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-primary: #4369c7;
+        --color-primary-hover: #3c5eb3;
+        --color-primary-active: #3856b0;
+        --color-text-inverse: #ffffff;
+        --color-selection-fg: #cbcdce;
+
+        --color-bg: #1b202b;
+        --color-surface: #2b2d30;
+        --color-surface-2: #384151;
+        --color-toolbar: #2b2d30;
+        --color-text: #cbcdce;
+        --color-text-secondary: #8f939a;
+        --color-border: #1e1f22;
+        --color-divider: #4c5463;
+
+        --color-selected: #32426b;
+        --color-hover-overlay: #4e5055;
+        --color-button-hover-bg: #4c5463;
+        --color-button-hover-text: #cbcdce;
+        --color-disabled-bg: #1a1a1a;
+        --color-disabled-fg: #a0a0a0;
+
+        --color-input-border: #4c5463;
+        --color-input-bg: #3f3f46;
+        --color-focus-ring: rgb(67 105 199 / 40%);
+
+        --color-console-bg: #151728;
+        --color-console-fg: #54ad6c;
+        --color-danger: #eb7171;
+
+        --color-scrollbar: #333333;
+        --color-scrollbar-button: #444444;
+        --color-scrollbar-thumb: #444547;
+        --color-scrollbar-thumb-hover: #545457;
+
+        --color-tooltip-bg: #293b40;
+        --color-tooltip-border: #1e1f22;
+        --color-tooltip-fg: #cbcdce;
+
+        --color-mark-bg: #7c5d5d;
+        --color-mark-fg: #cbcdce;
+
+        --color-uid: #b18cea;
+        --color-keyA: #96e187;
+        --color-keyB: #74d05c;
+        --color-access: #f0996e;
+
+        --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+        --shadow-card: 0 4px 12px rgb(0 0 0 / 25%);
+        --shadow-panel: 0 6px 16px rgb(0 0 0 / 30%);
+    }
+}

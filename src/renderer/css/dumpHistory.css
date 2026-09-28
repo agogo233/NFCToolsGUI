@@ -1,8 +1,4 @@
-.selected .dump-item {
-    border-radius: 10px;
-}
 body {
-    font-family: Arial, sans-serif;
     margin-bottom: 90px;
     user-select: none;
 }
@@ -10,7 +6,7 @@ body {
 hr {
     border: 0;
     padding-top: 1px;
-    background: linear-gradient(to right, transparent, #d0d0d5, transparent);
+    background: linear-gradient(to right, transparent, var(--color-divider), transparent);
 }
 
 #dumpsList {
@@ -20,16 +16,32 @@ hr {
     width: 80%;
 }
 
+#dumpsList li {
+    list-style: none;
+}
+
 .dump-item {
-    margin-bottom: 5px;
-    margin-top: 5px;
+    margin: 5px 0;
     cursor: pointer;
     padding: 5px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 25px;
+    min-height: 25px;
     text-align: center;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    transition: box-shadow 130ms, background-color 130ms, border-color 130ms;
+}
+
+.dump-item:hover {
+    box-shadow: var(--shadow-sm);
+}
+
+.selected .dump-item {
+    background-color: var(--color-selected);
+    border-color: transparent;
 }
 
 #buttons {
@@ -40,135 +52,74 @@ hr {
     display: flex;
     justify-content: center;
     z-index: 1;
-    padding-top: 10px;
-    padding-bottom: 20px;
+    padding: 10px 0 20px;
+    background-color: var(--color-bg);
 }
 
 #buttons button {
-    border: none;
-    border-radius: 10px;
-    width: 80px;
-    height: 30px;
-    cursor: pointer;
-    margin: 10px 10px 20px 15px;
+    margin: 0 8px;
 }
-#buttons button:hover{
-    transition: 80ms;
-}
+
 #buttons button:disabled {
-    opacity: 0.5;
-    box-shadow: none;
-    cursor: not-allowed;
+    background-color: var(--color-disabled-bg);
+    color: var(--color-disabled-fg);
 }
-#dumpsList li span{
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-    font-size: 14px;
-}
+
 .dump-action-button {
     cursor: pointer;
-    background-color: transparent;
-    border: none;
     width: 30px;
     height: 30px;
+    margin: 0;
+    padding: 0;
+    background-color: transparent;
+    box-shadow: none;
+    border-radius: 50%;
+    transition: background-color 130ms;
 }
+
 .dump-action-button:hover {
-    border-radius: 20%;
+    background-color: var(--color-hover-overlay);
+    color: var(--color-text);
 }
-.dump-action-button-img{
+
+.dump-action-button-img {
     width: 100%;
     height: 100%;
     vertical-align: middle;
     text-align: center;
 }
-.dump-action-edit{
+
+input.dump-action-edit {
     width: 100%;
-    font-size: 14px;
+    font-size: var(--fs-base);
     padding: 3px;
     outline: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-input-border);
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    transition: border-color 130ms, box-shadow 130ms;
 }
-.dump-item-filename{
+
+input.dump-action-edit:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+#dumpsList li span {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: var(--fs-base);
+}
+
+.dump-item-filename {
     min-width: calc(100% - 60px);
     text-align: left;
 }
 
-@media (prefers-color-scheme: light) {
-    .selected .dump-item {
-        background-color: #D2DEF9;
-    }
-
-    #buttons {
-        background-color: white;
-    }
-
-    #buttons button {
-        background-color: #f4f5fc;
-        color: black;
-        box-shadow: 0 6px 12px rgb(65 104 207 / 20%);
-    }
-
-    #buttons button:hover {
-        background-color: #4168cf;
-        color: white;
-    }
-
-    #buttons button:disabled {
-        background-color: #e0e0e0;
-        color: #a0a0a0;
-    }
-
-    .dump-action-button:hover {
-        background-color: rgba(162, 161, 161, 0.37);
-    }
-
-    .dump-action-edit {
-        border-color: #66afe9;
-        box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6)
-    }
-}
 @media (prefers-color-scheme: dark) {
-    body {
-        background-color: #1b202b;
-        color: #cbcdce;
-    }
-
-    .selected .dump-item {
-        background-color: #32426b;
-    }
-
-    #buttons {
-        background-color: #1b202b;
-    }
-
-    #buttons button {
-        background-color: #384151;
-        color: #cbcdce;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    #buttons button:hover {
-        background-color: #4c5463;
-        color: #cbcdce;
-    }
-
-    #buttons button:disabled {
-        background-color: #1a1a1a;
-        color: #a0a0a0;
-    }
-
-    .dump-action-button:hover {
-        background-color: rgba(162, 161, 161, 0.37);
-    }
-
-    .dump-action-edit {
-        background-color: #3f3f46;
-        color: #cbcdce;
-        border-color: #000000;
-        box-shadow: inset 0 1px 1px #222225, 0 0 8px rgba(67, 68, 82, 0.93)
-    }
-    .invert-color-when-dark{
+    .invert-color-when-dark {
         filter: invert(80%);
     }
 }

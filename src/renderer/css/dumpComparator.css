@@ -1,136 +1,73 @@
-@font-face{
-    font-family: 'SourceCodePro';
-    src: url('../assets/font/SourceCodePro-Regular.ttf');
-    font-weight: normal;
-    font-style: normal;
+body {
+    user-select: none;
 }
-.dump-text{
-    font-family: "SourceCodePro", serif;
-    font-size: 14px;
+
+.dump-text {
+    font-family: var(--font-mono);
+    font-size: var(--fs-base);
     white-space: pre;
     margin: 0;
     padding: 0;
     border: 0;
     width: 100%;
-    height: 100%;
     overflow: auto;
     user-select: text;
-}
-.sector-tag{
-    margin-bottom: 8px;
+    background-color: var(--color-surface);
+    color: var(--color-text);
 }
 
-#top-bar{
-    padding-top: 10px;
+.sector-tag {
+    margin-bottom: var(--space-2);
+    font-weight: 600;
+}
+
+#top-bar {
+    padding: var(--space-3) 0 0;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
+    background-color: var(--color-bg);
 }
-#top-bar span{
-    margin-left: 20px;
+
+#top-bar span {
+    margin-left: var(--space-5);
     display: inline-block;
     vertical-align: middle;
-}
-#top-bar button{
-    height: 20px;
-    border: none;
-    border-radius: 5px;
-    vertical-align: middle;
+    font-size: var(--fs-base);
 }
 
-#top-bar button:focus{
-    outline: none;
+#top-bar button {
+    width: auto;
+    padding: 0 14px;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
 }
+
 #top-bar hr {
-    margin-bottom: 0;
-}
-#compare-container{
-    margin-top: 80px;
-    text-align: center;
-}
-#compare-container hr{
     border: 0;
     padding-top: 1px;
-    margin-top: 8px;
-    margin-bottom: 8px;
+    margin: var(--space-3) 0 0;
+    background: linear-gradient(to right, transparent, var(--color-divider), transparent);
 }
 
-body{
-    user-select: none;
-}
-button{
-    cursor: pointer;
+#compare-container {
+    margin-top: 110px;
+    text-align: center;
 }
 
-@media (prefers-color-scheme: light) {
-    .dump-text {
-        background-color: #fff;
-        color: #000;
-    }
-
-    #top-bar {
-        background-color: white;
-    }
-
-    #top-bar button {
-        background-color: #486bc7;
-        color: white;
-        box-shadow: 0 0 5px rgb(72 107 199 / 30%);
-    }
-
-    #top-bar button:active {
-        background-color: #3856b0;
-    }
-
-    #top-bar hr {
-        background-color: white;
-    }
-
-    #compare-container hr {
-        background: linear-gradient(to right, transparent, #b0b0b4, transparent);
-    }
-
-    mark {
-        background-color: #ffd6d6;
-    }
+#compare-container hr {
+    border: 0;
+    padding-top: 1px;
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-2);
+    background: linear-gradient(to right, transparent, var(--color-divider), transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #1b202b;
-        color: #cbcdce;
-    }
-
-    .dump-text {
-        background-color: #1b202b;
-        color: #cbcdce;
-    }
-
-    #top-bar {
-        background-color: #1b202b;
-    }
-
-    #top-bar button {
-        background-color: #384151;
-        color: #cbcdce;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    #top-bar button:active {
-        background-color: #475467;
-    }
-
-    #top-bar hr {
-        background-color: white;
-    }
-
-    #compare-container hr {
-        background: linear-gradient(to right, transparent, #b0b0b4, transparent);
-    }
-
-    mark {
-        color: #cbcdce;
-        background-color: #7c5d5d;
-    }
+mark {
+    background-color: var(--color-mark-bg);
+    color: var(--color-mark-fg);
 }

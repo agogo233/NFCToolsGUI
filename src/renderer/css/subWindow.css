@@ -1,247 +1,66 @@
-@font-face{
-    font-family: 'SourceCodePro';
-    src: url('../assets/font/SourceCodePro-Regular.ttf');
-    font-weight: normal;
-    font-style: normal;
-}
-
-body{
+body {
     user-select: none;
     text-align: center;
     margin-top: 20px;
 }
 
-.sub-title{
-    text-decoration: underline;
-    font-size: 14px;
-    font-family: "黑体", "Times New Roman", serif;
-    margin-bottom: 10px;
+.title {
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    margin-top: var(--space-5);
+    margin-bottom: var(--space-3);
+}
+
+.sub-title {
+    font-size: var(--fs-base);
+    font-weight: 600;
+    margin-top: var(--space-4);
+    margin-bottom: var(--space-3);
 }
 
 .hr-edge-weak {
     border: 0;
     padding-top: 1px;
-    margin-top: 20px;
-    margin-bottom: 10px;
+    margin-top: var(--space-5);
+    margin-bottom: var(--space-3);
+    background: linear-gradient(to right, transparent, var(--color-divider), transparent);
 }
 
-.title{
-    font-size: 14px;
-    font-family: "黑体", "Times New Roman", serif;
-    margin-top: 20px;
-}
-
-.final-button button{
-    border: none;
-    border-radius: 10px;
+label:not(.radio-wrapper):not(.checkbox-wrapper) {
+    display: inline-block;
+    padding-right: 8px;
     width: 80px;
-    height: 30px;
-    margin-top: 20px;
-    cursor: pointer;
-    margin-right: 15px;
-    margin-left: 15px;
-}
-.final-button button:hover{
-    transition: 130ms;
+    vertical-align: middle;
+    text-align: right;
+    white-space: nowrap;
+    font-size: var(--fs-base);
 }
 
-input[type="text"]{
-    outline-style: none ;
-    border-radius: 6px;
-    padding: 6px;
+#dict-file {
+    display: inline-block;
     width: 200px;
-    font-size: 14px;
-    font-family: "SourceCodePro", serif;
-    margin-top: 20px;
-}
-input[type="text"]:focus{
-    outline: 0;
+    text-align: right;
+    vertical-align: middle;
 }
 
-.radio-group{
-    margin-top: 20px;
-    display:inline-block;
+#dict-file button {
+    margin-left: var(--space-2);
+}
+
+#dark-mode,
+#light-mode,
+#follow-system-mode {
+    margin-right: 10px;
+}
+
+.radio-group {
+    margin-top: var(--space-5);
+    display: inline-block;
     width: 200px;
     text-align: center;
     margin-right: 10px;
 }
 
-input[type="radio"]{
-    display: none;
-}
-input[type="radio"] + .radio-wrapper{
-    display: inline-block;
-    line-height: 30px;
-    height: 30px;
-    width: 40%;
-    border-radius: 40px;
-    cursor: pointer;
-    margin-left: 4.5%;
-    margin-right: 4.5%;
-}
-input[type="radio"]:checked + .radio-wrapper{
-    transition: 130ms;
-}
-input[type="radio"]:disabled + .radio-wrapper{
-    transition: 0ms;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-label:not(.radio-wrapper):not(.checkbox-wrapper){
-    display: inline-block;
-    padding-right: 8px;
-    width:80px;
-    vertical-align: center;
-    direction: rtl;
-    white-space: nowrap;
-}
-#dict-file{
-    display: inline-block;
-    width: 200px;
-    text-align: right;
-}
-button{
-    outline: 0;
-    border: none;
-    border-radius: 10px;
-    width: 80px;
-    height: 40px;
-    cursor: pointer;
-    margin-right: 10px;
-    margin-left: 15px;
-    vertical-align: middle;
-}
-button:hover{
-    transition: 80ms;
-}
-input{
-    outline: 0;
-}
-input:disabled{
-    box-shadow: none;
-    cursor: not-allowed;
-}
-
-@media (prefers-color-scheme: light) {
-    .hr-edge-weak {
-        background: linear-gradient(to right, transparent, #d0d0d5, transparent);
-    }
-
-    .final-button button {
-        background-color: #f4f5fc;
-        color: black;
-        box-shadow: 0 6px 12px rgb(65 104 207 / 20%);
-    }
-
-    .final-button button:hover {
-        background-color: #4168cf;
-        color: white;
-    }
-
-    input[type="text"] {
-        border: 1px solid #ccc;
-    }
-
-    input[type="text"]:focus {
-        border-color: #66afe9;
-        box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6)
-    }
-
-    input[type="radio"] + .radio-wrapper {
-        background-color: white;
-        color: black;
-        box-shadow: 0 6px 12px rgb(65 104 207 / 20%);
-    }
-
-    input[type="radio"]:checked + .radio-wrapper {
-        background-color: #4168cf;
-        color: white;
-    }
-
-    input[type="radio"]:disabled + .radio-wrapper {
-        color: #ccc;
-        background-color: #e0e0e0;
-    }
-
-    button {
-        background-color: #f4f5fc;
-        color: black;
-        box-shadow: 0 6px 12px rgb(65 104 207 / 20%);
-    }
-
-    button:hover {
-        background-color: #4168cf;
-        color: white;
-    }
-
-    input:disabled {
-        background-color: #e0e0e0;
-        color: #a0a0a0;
-    }
-}
-
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #1b202b;
-        color: #cbcdce;
-    }
-
-    .hr-edge-weak {
-        background: linear-gradient(to right, transparent, #d0d0d5, transparent);
-    }
-
-    .final-button button {
-        background-color: #384151;
-        color: #cbcdce;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .final-button button:hover {
-        background-color: #4c5463;
-        color: #cbcdce;
-    }
-
-    input[type="text"] {
-        border: 1px solid #000000;
-        background-color: #3f3f46;
-        color: #cbcdce;
-    }
-
-    input[type="text"]:focus {
-        border-color: #000000;
-        box-shadow: inset 0 1px 1px #222225, 0 0 8px rgba(67, 68, 82, 0.93)
-    }
-
-    input[type="radio"] + .radio-wrapper {
-        background-color: #2d333f;
-        color: #cbcdce;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    input[type="radio"]:checked + .radio-wrapper {
-        background-color: #1f3062;
-        color: white;
-    }
-
-    input[type="radio"]:disabled + .radio-wrapper {
-        color: #ccc;
-        background-color: #1a1a1a;
-    }
-
-    button {
-        background-color: #384151;
-        color: #cbcdce;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    button:hover {
-        background-color: #4c5463;
-        color: #cbcdce;
-    }
-
-    input:disabled {
-        background-color: #1a1a1a;
-        color: #a0a0a0;
-    }
+.final-button button {
+    margin: var(--space-5) 15px 0;
 }

@@ -1,110 +1,79 @@
-body{
+body {
     user-select: none;
-    background-color: #f7f8fa;
 }
-h1{
+
+h1 {
     margin-bottom: 0;
+    font-size: var(--fs-title);
 }
+
 .container {
     display: flex;
+    padding: var(--space-5);
 }
 
 .icon {
     width: 150px;
     height: 150px;
-    margin-top: 40px;
-    margin-left: 20px;
+    margin-top: var(--space-5);
+    margin-left: var(--space-3);
 }
 
 .info {
     flex: 1;
-    padding-left: 20px;
+    padding-left: var(--space-5);
 }
-.opensource {
-    height: 200px;
-    width: calc(100% - 20px);
-    overflow-y: scroll;
-    background-color: #eaeaea;
-    border-radius: 20px;
-    padding-top: 0;
-    user-select: text;
-}
-ul{
-    margin: 10px;
-}
-span{
-    font-size: 14px;
+
+span {
+    font-size: var(--fs-base);
     display: inline-block;
     padding-top: 8px;
     padding-bottom: 2px;
 }
 
 a:link {
-    font-size: 14px;
-    color: #000000;
+    font-size: var(--fs-base);
+    color: var(--color-text);
     text-decoration: none;
 }
+
 a:visited {
     text-decoration: none;
 }
+
 a:hover {
     text-decoration: underline;
 }
-button{
-    border: none;
-    background-color: lightgray;
-    cursor: pointer;
-    font-size: 12px;
-    color: #000000;
-    border-radius: 20px;
-    padding: 3px 8px 3px 8px;
-    margin-left: 5px;
+
+.opensource {
+    height: 200px;
+    width: calc(100% - 20px);
+    overflow-y: scroll;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    user-select: text;
 }
-button:hover{
-    background-color: #dcdbdb;
-}
-button:focus{
-    outline: none;
-}
-ul{
+
+.opensource ul {
+    margin: var(--space-2);
     padding-left: 0;
-    font-size: 14px;
 }
-li{
-    background-color: #f3f3f3;
-    padding: 5px;
-    border-radius: 8px;
+
+.opensource li {
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
     list-style: none;
-    margin-bottom: 5px;
-    margin-top: 5px;
+    margin: 5px 0;
+    background-color: var(--color-surface-2);
+    overflow: hidden;
+    font-size: var(--fs-base);
 }
-.opensource_link{
+
+.opensource_link {
     float: right;
     display: inline-block;
 }
-.tag{
-    font-weight: bold;
-}
 
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #1b202b;
-        color: #cbcdce;
-    }
-    .opensource {
-        background-color: #212121;
-    }
-    a:link {
-        color: #cbcdce;;
-    }
-    button {
-        background-color: #3a4150;
-        color: #cbcdce;
-    }
-    button:hover {
-        background-color: #53565d;
-    }
-    li {
-        background-color: #444444;
-    }
+.tag {
+    font-weight: bold;
 }

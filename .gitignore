@@ -93,3 +93,9 @@ dumpfiles/
 keys.txt
 *.mfd
 
+# libusb-win32 (vendored) build artifacts
+source/libusb-win32/*.o
+source/libusb-win32/*.a
+source/libusb-win32/*.dll
+source/libusb-win32/*.exp
+

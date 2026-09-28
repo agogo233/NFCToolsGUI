@@ -23,7 +23,6 @@ esac
 # install msys2 dependency
 if [ "$os" = "MINGW64" ]; then
     echo "============================== install msys dependency =============================="
-    pacman -S --noconfirm unzip
     pacman -S --noconfirm mingw-w64-x86_64-crt-git
     pacman -S --noconfirm mingw-w64-x86_64-gcc
     pacman -S --noconfirm mingw-w64-x86_64-make
@@ -49,12 +48,15 @@ cd "$source"
   echo
   echo "============================== libusb =============================="
 if [ "$os" = "MINGW64" ]; then
-    curl -Lo libusb-win32.zip https://github.com/mcuee/libusb-win32/releases/download/snapshot_1.2.7.3/libusb-win32-bin-1.2.7.3.zip
-    unzip -o libusb-win32.zip
-    cd ./libusb-win32-bin-1.2.7.3
-    cp ./bin/x86/libusb0_x86.dll "$prefix"/bin/libusb0.dll
-    cp -a ./include "$prefix"
-    cp -a ./lib "$prefix"
+    # vendored from mcuee/libusb-win32 @ snapshot_1.2.7.3
+    # build with 64-bit mingw only (32-bit gcc needs Windows DDK headers)
+    cd ./libusb-win32
+    make dll
+    cp libusb0.dll "$prefix"/bin/libusb0.dll
+    mkdir -p "$prefix"/lib/gcc "$prefix"/include
+    cp libusb.a "$prefix"/lib/gcc/libusb.a
+    cp src/lusb0_usb.h "$prefix"/include/
+    cd "$source"
 elif [ "$os" = "Darwin" ]; then
     mkdir -p ./libusb
     cd ./libusb

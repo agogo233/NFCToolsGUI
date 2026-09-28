@@ -34,9 +34,9 @@ jobs:
         run: sh ./compile.sh
 
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
-          node-version: '18.x'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies

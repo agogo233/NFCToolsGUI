@@ -85,6 +85,7 @@
   "html_save_log": "保存日志",
   "html_clear_log": "清空日志",
   "html_timer": "计时器",
+  "html_eta_remaining": "预计剩余",
   "html_current_version": "当前版本:",
   "html_please_input_known_keys": "请输入已知密钥",
   "html_input_test_info": "输入你想要测试的扇区信息以及字典起始位置, 以便接着上次跑",

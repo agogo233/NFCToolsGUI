@@ -85,6 +85,7 @@
   "html_save_log": "Save Log",
   "html_clear_log": "Clear Log",
   "html_timer": "Timer",
+  "html_eta_remaining": "ETA remaining",
   "html_current_version": "Current Version:",
   "html_please_input_known_keys": "Please Enter Known Keys",
   "html_input_test_info": "Enter the sector information and dictionary start position you want to test, to continue from where you left off",

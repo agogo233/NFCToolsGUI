@@ -40,6 +40,12 @@ let newKeys = []
 let knownKeyInfo = []
 let unknownKeyInfo = []
 let totalUnknownKeys = 0
+let mfocStartTime = 0
+let mfocKeysDone = 0
+let mfocKeysTotal = 0
+let mfocLastUpdate = 0
+let mfocPendingLine = ""
+let mfocEtaFinished = false
 
 const defaultKeys = [
     "ffffffffffff",
@@ -516,11 +522,23 @@ function mfoc(args) {
     knownKeyInfo = []
     unknownKeyInfo = []
     checkKeyFileExist()
+
+    // 预估剩余时长: 字典攻击总轮数 = 内置默认密钥 + 密钥文件密钥 + -k 密钥
+    mfocStartTime = Date.now()
+    mfocKeysDone = 0
+    mfocLastUpdate = 0
+    mfocPendingLine = ""
+    mfocEtaFinished = false
+    const fileKeys = fs.readFileSync(knownKeysFile).toString().match(/[0-9A-Fa-f]{12}/g) || []
+    const argKeys = args.filter((arg) => arg.startsWith("-k"))
+    mfocKeysTotal = defaultKeys.length + fileKeys.length + argKeys.length
+
     exec(
         i18n("log_msg_start_mfoc"),
         'mfoc', args,
         (value) => {
             keyInfoStatistic(value)
+            updateMfocETA(value)
 
             let i = value.indexOf("UID (NFCID1):")
             if (i >= 0) {
@@ -544,6 +562,39 @@ function mfoc(args) {
             }
         }
     ).then(()=>{printExitLog(0)}).catch(() => {})
+}
+
+// 按字典攻击实测速度预估 mfoc 剩余时长
+function updateMfocETA(value) {
+    if (mfocEtaFinished) return
+    mfocPendingLine += value
+    const newlineIndex = mfocPendingLine.lastIndexOf("\n")
+    if (newlineIndex < 0) return
+    const complete = mfocPendingLine.slice(0, newlineIndex)
+    mfocPendingLine = mfocPendingLine.slice(newlineIndex + 1)
+    mfocKeysDone += (complete.match(/\[Key: /g) || []).length
+    if (mfocKeysDone === 0) return
+
+    if (mfocKeysDone >= mfocKeysTotal) {
+        mfocEtaFinished = true
+        printStatus(i18n("indicator_reading_ic_card"))
+        return
+    }
+
+    const now = Date.now()
+    if (now - mfocLastUpdate < 1000) return
+    mfocLastUpdate = now
+    const remainSec = Math.round((now - mfocStartTime) / 1000 / mfocKeysDone * (mfocKeysTotal - mfocKeysDone))
+    printStatus(`${i18n("indicator_reading_ic_card")} - ${i18n("html_eta_remaining")} ${formatDuration(remainSec)}`)
+}
+
+// 格式化时长为 hh:mm:ss / mm:ss
+function formatDuration(sec) {
+    const double = (num) => num < 10 ? `0${num}` : `${num}`
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor(sec / 60) % 60
+    const s = sec % 60
+    return h > 0 ? `${double(h)}:${double(m)}:${double(s)}` : `${double(m)}:${double(s)}`
 }
 
 // 统计密钥信息

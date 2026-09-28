@@ -1,12 +1,11 @@
 const {exec, killProcess, printExitLog, printLog, printStatus} = require("./execUtils")
 const fs = require('fs')
-const {dialog, app, shell} = require('electron')
+const {dialog, app} = require('electron')
 const cp = require("child_process");
 const status = require("./status")
 const { SerialPort } = require('serialport')
 const path = require("path")
 const { i18n } = require('./i18n')
-const https = require('https');
 
 const {
     createDumpHistoryWindow,
@@ -462,55 +461,7 @@ const actions = {
         }
     },
     // about page
-    "open-about": createAboutWindow,
-
-    // 检查更新
-    "check-update": (isShowErrorDialog=false) => {
-        const repoAuthor = 'GSWXXN';
-        const repoName = 'NFCToolsGUI';
-
-        const options = {
-            hostname: 'api.github.com',
-            path: `/repos/${repoAuthor}/${repoName}/releases/latest`,
-            headers: {'User-Agent': repoName}
-        };
-
-        https.get(options, (response) => {
-            let body = '';
-            response.on('data', (chunk) => {
-                body += chunk;
-            });
-            response.on('end', () => {
-                const res = JSON.parse(body)
-                const versionName = res['name'] ?? ''
-                const updateLogs = res['body'] ?? ''
-                const updateUrl = res['html_url'] ?? ''
-
-                if (versionName !== `v${app.getVersion()}`) {
-                    dialog.showMessageBox({
-                        type: 'none',
-                        buttons: [i18n("dialog_button_go_to_download"), i18n("dialog_button_cancel")],
-                        message: i18n("dialog_msg_new_version_found"),
-                        detail: `${i18n("dialog_msg_version")}: ${versionName}\n\n${i18n("dialog_msg_update_logs")}\n${updateLogs}`,
-                    }).then((response) => {
-                        if (response.response === 0) shell.openExternal(updateUrl)
-                    })
-                }
-            });
-        }).on("error", (error) => {
-            if (isShowErrorDialog)
-                dialog.showMessageBoxSync({
-                    type: 'error',
-                    buttons: [i18n("dialog_button_ok")],
-                    message: i18n("dialog_msg_check_update_failed"),
-                    detail: error.message,
-                })
-            else {
-                printLog("\n\n" + i18n("log_msg_check_update_failed"))
-                printLog("\n" + error.message)
-            }
-        });
-    }
+    "open-about": createAboutWindow
 }
 
 // 保存密钥

@@ -168,10 +168,6 @@ select{
   display: flex;
   align-items: center;
 }
-#check-update{
-  display: block;
-  margin-left: 20px;
-}
 .bottom-bar-item span{
   white-space: nowrap;
   display: inline-block;
@@ -267,14 +263,6 @@ select{
   box-sizing: border-box;
   margin-top: 0;
   padding-top: 0;
-}
-#check-update{
-  font-size: 14px;
-  cursor: pointer;
-  border: none;
-  border-radius: 6px;
-  padding-top: 5px;
-  padding-bottom: 5px;
 }
 .windows-control button{
   background-color: transparent;
@@ -378,11 +366,6 @@ select{
     border-right: 1px solid #ebecf0;
   }
 
-  #check-update {
-    color: #333434;
-    background-color: #dddfe3;
-  }
-
   #close-app:hover {
     background-color: #eb7171;
   }
@@ -470,11 +453,6 @@ select{
     border-top: 1px solid #1e1f22;
     border-left: 1px solid #1e1f22;
     border-right: 1px solid #1e1f22;
-  }
-
-  #check-update {
-    color: #cbcdce;
-    background-color: #1e355f;
   }
 
   #close-app:hover {

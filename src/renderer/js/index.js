@@ -7,8 +7,6 @@ let intervalID = undefined;
 let timerSecond = 0
 const $statusText = $("#status-text")
 
-mainProcess.execAction("check-update")
-
 if (mainProcess.platform !== "darwin") {
     const titleArea = $(".title")
     $(".windows-control").show()

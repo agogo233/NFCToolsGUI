@@ -47,17 +47,15 @@ jobs:
           NFCTOOLSGUI_COMPILER: "Github Actions"
         run: npm run make
 
-      - name: Find output files (Windows)
+      - name: Collect output files (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "output_files<<$EOF" >> $GITHUB_ENV
-          find out/make/zip -name "*.zip" >> $GITHUB_ENV
-          echo "$EOF" >> $GITHUB_ENV
+          mkdir -p upload
+          find out/make/zip -name "*.zip" -exec cp {} upload/ \;
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: NFCToolsGUI-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ env.output_files }}
+          path: upload

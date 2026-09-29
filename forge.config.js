@@ -60,6 +60,15 @@ module.exports = {
             fs.unlink(path.join(url, "python3"), () => {
                 fs.rmdir(url, () => {})
             });
+        },
+        "postPackage": async (forgeConfig, packageResult) => {
+            // LICENSES.chromium.html is a ~19 MB Electron dist file that is not
+            // needed at runtime. packagerConfig.ignore only filters project files,
+            // not the dist, so it is removed here after packaging but before the
+            // zip is created.
+            for (const output of packageResult.outputPaths) {
+                fs.unlink(path.join(output, "LICENSES.chromium.html"), () => {})
+            }
         }
     }
 }

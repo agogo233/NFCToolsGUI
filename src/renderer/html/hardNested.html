@@ -52,9 +52,11 @@
 
 <br><br>
 
+<div id="hard-nested-hint" hidden style="color: var(--color-danger);">{{ html_detect_card_first }}</div>
+
 <div class="final-button">
 <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
-<button onclick="window.electronAPI.execAction('hard-nested-config-done', {
+<button id="execute-btn" onclick="window.electronAPI.execAction('hard-nested-config-done', {
     knownKey: document.getElementById('known-key').value,
     knownSector: document.getElementById('known-sector').value,
     knownKeyType: getRatioValue('known-key-type'),
@@ -75,6 +77,15 @@
             setRatioValue('known-key-type', config.knownKeyType)
             document.getElementById('target-sector').value = config.targetSector
             setRatioValue('target-key-type', config.targetKeyType)
+        } else {
+            document.getElementById("hard-nested-hint").hidden = false
+            document.getElementById("known-key").disabled = true
+            document.getElementById("known-sector").disabled = true
+            document.getElementById("target-sector").disabled = true
+            document.getElementById("auto-run").disabled = true
+            document.getElementById("collect-only").disabled = true
+            document.getElementById("execute-btn").disabled = true
+            document.querySelectorAll('input[type=radio]').forEach((el) => el.disabled = true)
         }
     })
 

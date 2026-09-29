@@ -33,6 +33,7 @@
   "dialog_msg_choose_dump_file": "请选择转储文件",
   "dialog_msg_are_you_sure_to_delete_these_dumps": "你确定要删除这些转储文件吗？",
   "dialog_msg_confirm_write_uid": "该操作将会改写UFUID卡片的0块（UID）！！！\n改错0块后卡片可能变砖！\n即将写入的0块：\n",
+  "dialog_msg_confirm_write_dump": "确定要将此转储文件写入卡片吗？",
 
   "dialog_button_cancel" : "取消",
   "dialog_button_still_exit" : "仍然退出",
@@ -123,7 +124,7 @@
   "html_compute_dump": "比较转储",
   "html_edit_dump": "编辑转储",
   "html_delete_checked": "删除选中",
-  "html_write_this_dump": "写入此卡",
+  "html_write_this_dump": "写入此转储",
   "html_please_input_known_keys_split_by_comma": "请输入已知的Key, 以英文半角逗号分隔",
   "html_auto_run": "自动执行",
   "html_known_info": "已知信息",
@@ -138,5 +139,22 @@
   "html_license:": "许可证: ",
   "html_this_program_use_following_open_source_project": "本程序使用了以下开源项目:",
   "html_source_code": "源代码",
-  "html_license": "许可证"
+  "html_license": "许可证",
+
+  "html_read_area": "读卡",
+  "html_crack_area": "破解密钥",
+  "html_write_area": "写卡",
+  "html_no_device": "未连接设备",
+  "html_device_connecting": "正在连接...",
+  "html_device_connected": "已连接:",
+  "html_device_failed": "连接失败",
+  "event_task_failed": "任务异常退出, 退出码 ",
+  "event_task_killed": "任务已停止",
+  "event_keys_saved": "已保存 ",
+  "event_dump_saved": "转储文件已保存: ",
+  "guidance_unknown_pre": "检测到 ",
+  "guidance_unknown_post": " 个未知扇区密钥, 可尝试 HardNested 或字典测试",
+  "guidance_dump_saved": "解卡完成, 转储已保存: ",
+  "html_open_dump_folder": "打开转储目录",
+  "html_detect_card_first": "请先在主界面执行\"检测卡片加密\""
 }

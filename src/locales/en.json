@@ -33,6 +33,7 @@
   "dialog_msg_choose_dump_file": "Please choose a dump file",
   "dialog_msg_are_you_sure_to_delete_these_dumps": "Are you sure you want to delete these dump files?",
   "dialog_msg_confirm_write_uid": "This operation will rewrite block 0 (UID) of the UFUID card!!!\nA wrong block 0 can brick the card!\nBlock 0 to write:\n",
+  "dialog_msg_confirm_write_dump": "Are you sure you want to write this dump to the card?",
 
   "dialog_button_cancel": "Cancel",
   "dialog_button_still_exit": "Still Exit",
@@ -138,5 +139,22 @@
   "html_license:": "License: ",
   "html_this_program_use_following_open_source_project": "This program uses the following open source projects:",
   "html_source_code": "Source Code",
-  "html_license": "License"
+  "html_license": "License",
+
+  "html_read_area": "Read Card",
+  "html_crack_area": "Crack Keys",
+  "html_write_area": "Write Card",
+  "html_no_device": "No device connected",
+  "html_device_connecting": "Connecting...",
+  "html_device_connected": "Connected:",
+  "html_device_failed": "Connection failed",
+  "event_task_failed": "Task exited with code ",
+  "event_task_killed": "Task stopped",
+  "event_keys_saved": "Saved ",
+  "event_dump_saved": "Dump saved: ",
+  "guidance_unknown_pre": "Found ",
+  "guidance_unknown_post": " unknown sector key(s), you can try HardNested or Dictionary Test",
+  "guidance_dump_saved": "Card decryption finished, dump saved: ",
+  "html_open_dump_folder": "Open Dump Folder",
+  "html_detect_card_first": "Please run Detect Card Encryption on the main window first"
 }

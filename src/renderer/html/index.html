@@ -56,25 +56,45 @@
     </div>
 </div>
 
+<div id="device-status-bar">
+    <span id="device-status-indicator"></span>
+    <span id="device-status-text">{{ html_no_device }}</span>
+</div>
+
+<div id="guidance-bar" hidden>
+    <span id="guidance-text"></span>
+    <div id="guidance-buttons"></div>
+</div>
+
 <div class="main-button-area">
-    <button class="main-button" onclick="mainProcess.execAction('read-IC')">{{ html_read_card }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('write-IC')">{{ html_write_card }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('format-card')">{{ html_format_card }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('input-keys-read-IC')">{{ html_read_card_with_known_key }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('detect-card-type')">{{ html_detect_card }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('write-ufuid-uid')">{{ html_write_ufuid_uid }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('lock-ufuid')">{{ html_lock_ufuid }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('hard-nested')">{{ html_hard_nested }}</button>
-    <button class="main-button" onclick="mainProcess.execAction('dict-test')">{{ html_test_dictionary }}</button>
+    <div class="button-column">
+        <div class="column-title">{{ html_read_area }}</div>
+        <button class="main-button primary" onclick="mainProcess.execAction('read-IC')">{{ html_read_card }}</button>
+        <button class="main-button" onclick="mainProcess.execAction('input-keys-read-IC')">{{ html_read_card_with_known_key }}</button>
+        <button class="main-button" onclick="mainProcess.execAction('detect-card-type')">{{ html_detect_card }}</button>
+    </div>
+    <div class="button-column">
+        <div class="column-title">{{ html_crack_area }}</div>
+        <button class="main-button" onclick="mainProcess.execAction('hard-nested')">{{ html_hard_nested }}</button>
+        <button class="main-button" onclick="mainProcess.execAction('dict-test')">{{ html_test_dictionary }}</button>
+    </div>
+    <div class="button-column">
+        <div class="column-title">{{ html_write_area }}</div>
+        <button class="main-button" onclick="mainProcess.execAction('write-IC')">{{ html_write_card }}</button>
+        <button class="main-button" onclick="mainProcess.execAction('format-card')">{{ html_format_card }}</button>
+        <button class="main-button" onclick="mainProcess.execAction('write-ufuid-uid')">{{ html_write_ufuid_uid }}</button>
+        <button class="main-button danger" onclick="mainProcess.execAction('lock-ufuid')">{{ html_lock_ufuid }}</button>
+    </div>
 </div>
 
 <div class="bottom-area">
+    <div id="event-bar"></div>
     <div id="left-bar">
         <button class="bar-button" onclick="isLockScroll = !isLockScroll; $(this).children('.button-img').attr('src', isLockScroll ? '../assets/icon/svg/locked.svg' : '../assets/icon/svg/unlock.svg'); $(this).children('.tool-tip-text').html(isLockScroll ? '{{ html_lock_scroll }}' : '{{ html_unlock_scroll }}')">
             <img class="button-img" src="../assets/icon/svg/unlock.svg" alt="{{ html_lock_scroll }}">
             <span class="tool-tip-text">{{ html_lock_scroll }}</span>
         </button>
-        <button class="bar-button" onclick="resetStatus();mainProcess.execAction('cancel-task')">
+        <button class="bar-button" onclick="resetStatus();hideProgress();mainProcess.execAction('cancel-task')">
             <img class="button-img" src="../assets/icon/svg/stop.svg" alt="{{ html_stop_task }}">
             <span class="tool-tip-text">{{ html_stop_task }}</span>
         </button>
@@ -88,6 +108,9 @@
         </button>
     </div>
     <textarea id="log" readonly>Hello cardman!</textarea>
+    <div id="progress-bar" hidden>
+        <div id="progress-fill"></div>
+    </div>
     <div id="bottom-bar">
         <div class="bottom-bar-item" id="status" style="width: 300px">
             <div id="status-indicator"></div>

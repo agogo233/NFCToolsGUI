@@ -1,6 +1,6 @@
 const {exec, killProcess, printExitLog, printLog, printStatus} = require("./execUtils")
 const fs = require('fs')
-const {dialog, app} = require('electron')
+const {dialog, app, shell} = require('electron')
 const cp = require("child_process");
 const status = require("./status")
 const { SerialPort } = require('serialport')
@@ -80,9 +80,14 @@ const actions = {
 
     // 连接设备
     "conn-usb-devices": (device) => {
-        if (device === " ") {status.currentDevice = null; return}
+        if (device === " ") {
+            status.currentDevice = null
+            sendToMainWindow("update-device-status", {state: "none"})
+            return
+        }
         printStatus(i18n("indicator_connecting_device"))
         status.currentDevice = device
+        sendToMainWindow("update-device-status", {state: "connecting", device})
         setNFCConfig()
     },
 
@@ -120,7 +125,7 @@ const actions = {
         }
 
         if (dumpId) {
-            startWrite(path.join(dumpsFolder, dumpId))
+            startWrite(path.isAbsolute(dumpId) ? dumpId : path.join(dumpsFolder, dumpId))
             return
         }
         dialog.showOpenDialog({
@@ -164,7 +169,18 @@ const actions = {
             i18n("log_msg_start_detect_card"),
             'nfc-mfdetect', [`-N`, `-f${knownKeysFile}`],
             (value) => {keyInfoStatistic(value)},
-        ).then(()=>{printExitLog(0)}).catch(() => {})
+        ).then(()=>{
+            printExitLog(0)
+            if (unknownKeyInfo.length > 0) {
+                sendToMainWindow("show-guidance", {
+                    text: `${i18n("guidance_unknown_pre")}${unknownKeyInfo.length}${i18n("guidance_unknown_post")}`,
+                    buttons: [
+                        {action: "hard-nested", label: i18n("html_hard_nested")},
+                        {action: "dict-test", label: i18n("html_test_dictionary")}
+                    ]
+                })
+            }
+        }).catch(() => {})
     },
 
     // 写 UFUID UID
@@ -262,7 +278,9 @@ const actions = {
         let uid, sector, keyType
         configs.knownSector = (parseInt(configs.knownSector) + 1) * 4 - 1
         configs.targetSector = (parseInt(configs.targetSector) + 1) * 4 - 1
+        if (!configs.autoRun) totalUnknownKeys = unknownKeyInfo.length
 
+        sendHardNestedProgress()
         printStatus(`${i18n("indicator_collecting_nonces")}${configs.autoRun ? ` - ${totalUnknownKeys - unknownKeyInfo.length + 1}/${totalUnknownKeys}` : ""}`)
         exec(
             `${i18n("log_msg_start_collect_nonces")}\n\n`,
@@ -314,6 +332,7 @@ const actions = {
                 }
             }).then(() => {
                 if (!configs.collectOnly)  {
+                    sendHardNestedProgress()
                     printStatus(`${i18n("indicator_doing_hard_nested")} - ${totalUnknownKeys - unknownKeyInfo.length + 1}/${totalUnknownKeys}`)
                     exec(
                         i18n("lod_msg_start_hard_nested"),
@@ -468,6 +487,13 @@ const actions = {
         });
     },
 
+    // 打开转储目录
+    "open-dump-folder": () => {
+        fs.mkdir(dumpsFolder, {recursive: true}, () => {
+            shell.openPath(dumpsFolder)
+        })
+    },
+
     // 历史记录
     "dump-history": () => {
         fs.mkdir(dumpsFolder, () => {
@@ -540,12 +566,17 @@ const actions = {
 // 保存密钥
 function saveKeys(keys) {
     const knownKeys = fs.readFileSync(knownKeysFile).toString().match(/[0-9A-Fa-f]{12}/g)
+    const knownSet = knownKeys ? new Set(knownKeys) : new Set()
     keys = Array.from(new Set(knownKeys ? knownKeys.concat(keys) : keys))
     defaultKeys.forEach((value) => {
         let i = keys.indexOf(value)
         if (i >= 0) keys.splice(i, 1)
     })
     fs.writeFileSync(knownKeysFile, `${keys.join("\n")}`)
+    const fresh = keys.filter((key) => !knownSet.has(key))
+    if (fresh.length > 0) {
+        sendToMainWindow("update-events", {type: "key", text: `${i18n("event_keys_saved")}${fresh.join(", ")}`})
+    }
 }
 
 // 先读卡，然后进行后续操作
@@ -563,7 +594,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
         (value) => {keyInfoStatistic(value)},
         () => {
             saveKeys(newKeys)
-            if (isSaveDumpFile && fs.statSync(tempMFDFilePath).size === 0) {
+            if (isSaveDumpFile && fs.existsSync(tempMFDFilePath) && fs.statSync(tempMFDFilePath).size === 0) {
                 fs.unlinkSync(tempMFDFilePath)
             }
         }).then(() => {
@@ -616,6 +647,10 @@ function mfoc(args) {
         },
         () => {
             saveKeys(newKeys)
+            if (!fs.existsSync(tempMFDFilePath)) {
+                printLog(`\n${i18n("log_msg_dump_empty_not_saved")}\n`)
+                return
+            }
             if (fs.statSync(tempMFDFilePath).size === 0) {
                 fs.unlink(tempMFDFilePath, (err) => {
                     if (err) throw err
@@ -640,6 +675,7 @@ function mfoc(args) {
                     }
                     if (url) printLog(`\n\n${i18n("log_msg_file_already_saved_to")} ${url}\n`)
                     else printLog(`\n\n${i18n("log_msg_dump_auto_saved")} ${target}\n`)
+                    sendToMainWindow("dump-saved", {filename: target})
                 })
             })
         }
@@ -660,6 +696,7 @@ function updateMfocETA(value) {
     if (mfocKeysDone >= mfocKeysTotal) {
         mfocEtaFinished = true
         printStatus(i18n("indicator_reading_ic_card"))
+        sendToMainWindow("update-progress", {percent: 100})
         return
     }
 
@@ -668,6 +705,14 @@ function updateMfocETA(value) {
     mfocLastUpdate = now
     const remainSec = Math.round((now - mfocStartTime) / 1000 / mfocKeysDone * (mfocKeysTotal - mfocKeysDone))
     printStatus(`${i18n("indicator_reading_ic_card")} - ${i18n("html_eta_remaining")} ${formatDuration(remainSec)}`)
+    sendToMainWindow("update-progress", {percent: Math.round(mfocKeysDone / mfocKeysTotal * 100)})
+}
+
+// 发送 HardNested 自动执行的进度
+function sendHardNestedProgress() {
+    if (!totalUnknownKeys) return
+    const index = Math.max(1, totalUnknownKeys - unknownKeyInfo.length + 1)
+    sendToMainWindow("update-progress", {percent: Math.min(100, Math.round(index / totalUnknownKeys * 100))})
 }
 
 // 格式化时长为 hh:mm:ss / mm:ss
@@ -721,7 +766,13 @@ function setNFCConfig() {
                     status.isDeviceConnected = false
                 }
             },
-            () => {sendToMainWindow("setting-nfc-config", status.isDeviceConnected ? "success" : "failed")},
+            () => {
+                sendToMainWindow("setting-nfc-config", status.isDeviceConnected ? "success" : "failed")
+                sendToMainWindow("update-device-status", {
+                    state: status.isDeviceConnected ? "connected" : "failed",
+                    device: status.currentDevice
+                })
+            },
         ).then(()=>{printExitLog(0)}).catch(() => {})
     })
 }

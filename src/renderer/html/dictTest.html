@@ -35,9 +35,10 @@
 
 <br>
 <br>
+<div id="dict-test-hint" hidden style="color: var(--color-danger);">{{ html_detect_card_first }}</div>
 <div class="final-button">
     <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
-    <button onclick="window.electronAPI.execAction('dict-test-config-done', {
+    <button id="dict-execute-btn" onclick="window.electronAPI.execAction('dict-test-config-done', {
         sector: $('#sector').val(),
         keyType: getRatioValue('target-key-type'),
         startPosition: $('#start-position').val(),
@@ -56,6 +57,12 @@
             } else {
                 $('#target-key-type-A').prop('checked', true)
             }
+        } else {
+            document.getElementById("dict-test-hint").hidden = false
+            document.getElementById("sector").disabled = true
+            document.getElementById("start-position").disabled = true
+            document.getElementById("dict-execute-btn").disabled = true
+            document.querySelectorAll('input[name=target-key-type]').forEach((el) => el.disabled = true)
         }
     })
     window.electronAPI.onOpenDictFile((_event, filePath) => {

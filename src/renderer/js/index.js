@@ -41,6 +41,7 @@ mainProcess.onUpdateStatus((_event, value) => {
         case "free":
             statusIndicator.css("background-color", "transparent")
             resetStatus(true)
+            hideProgress()
             break
         case "running":
             statusIndicator.css("background-color", "green")
@@ -61,6 +62,7 @@ mainProcess.onUpdateStatus((_event, value) => {
         case "error":
             statusIndicator.css("background-color", "red")
             resetStatus(true)
+            hideProgress()
     }
 })
 
@@ -85,6 +87,75 @@ mainProcess.onUpdateUSBDevices((_event, value) => {
     })
 })
 
+// 显示引导条
+mainProcess.onShowGuidance((_event, value) => {
+    showGuidanceLocal(value.text, value.buttons)
+})
+
+// 解卡完成, dump 已保存
+mainProcess.onDumpSaved((_event, value) => {
+    const dumpName = value.filename.split("/").pop().split("\\").pop()
+    appendEvent("success", `${i18n("event_dump_saved")}${dumpName}`)
+    showGuidanceLocal(`${i18n("guidance_dump_saved")}${dumpName}`, [
+        {action: "write-IC", arg: value.filename, label: i18n("html_write_this_dump")},
+        {action: "open-dump-folder", label: i18n("html_open_dump_folder")}
+    ])
+})
+
+function showGuidanceLocal(text, buttons) {
+    const bar = document.getElementById("guidance-bar")
+    bar.hidden = false
+    $("#guidance-text").text(text)
+    const $buttons = $("#guidance-buttons").empty()
+    buttons.forEach((button) => {
+        const $btn = $(`<button>${button.label}</button>`)
+        $btn.on("click", () => {
+            mainProcess.execAction(button.action, button.arg)
+            bar.hidden = true
+        })
+        $buttons.append($btn)
+    })
+}
+
+// 追加事件摘要
+const EVENT_MAX = 30
+function appendEvent(type, text) {
+    const bar = document.getElementById("event-bar")
+    const time = new Date()
+    const pad = (n) => (n < 10 ? `0${n}` : n)
+    const line = document.createElement("div")
+    line.className = `event-line event-${type}`
+    line.textContent = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())} ${text}`
+    bar.appendChild(line)
+    while (bar.children.length > EVENT_MAX) {
+        bar.removeChild(bar.firstChild)
+    }
+    bar.scrollTop = bar.scrollHeight
+}
+
+// 接收事件摘要, 更新事件条
+mainProcess.onUpdateEvents((_event, value) => {
+    appendEvent(value.type, value.text)
+})
+
+// 接收进度更新
+mainProcess.onUpdateProgress((_event, value) => {
+    const bar = document.getElementById("progress-bar")
+    if (value.percent === null || value.percent === undefined) {
+        bar.hidden = true
+        $("#progress-fill").css("width", "0")
+        return
+    }
+    bar.hidden = false
+    $("#progress-fill").css("width", `${Math.min(100, Math.max(0, value.percent))}%`)
+})
+
+// 隐藏进度条
+function hideProgress() {
+    document.getElementById("progress-bar").hidden = true
+    $("#progress-fill").css("width", "0")
+}
+
 // 更新配置时, 禁止选择设备
 mainProcess.onSettingNFCConfig((_event, value) => {
     if (value === "start") {
@@ -96,6 +167,29 @@ mainProcess.onSettingNFCConfig((_event, value) => {
     } else {
         isConnectingDevice = false
         $(".selection").css("background-color", "#cf4152")
+    }
+})
+
+// 接收设备连接状态, 更新状态条
+mainProcess.onUpdateDeviceStatus((_event, value) => {
+    const indicator = $("#device-status-indicator")
+    const text = $("#device-status-text")
+    switch (value.state) {
+        case "connecting":
+            indicator.css("background-color", "#b6b239")
+            text.html(i18n("html_device_connecting"))
+            break
+        case "connected":
+            indicator.css("background-color", "#54ad6c")
+            text.html(`${i18n("html_device_connected")} ${value.device}`)
+            break
+        case "failed":
+            indicator.css("background-color", "#cf4152")
+            text.html(i18n("html_device_failed"))
+            break
+        default:
+            indicator.css("background-color", "var(--color-disabled-fg)")
+            text.html(i18n("html_no_device"))
     }
 })
 
@@ -157,8 +251,8 @@ function resetStatus(fromMain=false) {
         timerSecond = 0
     } else {
         $("#timer-value").html("")
-        $statusText.html(i18n("free"))
-        $statusText.prop("title", i18n("free"))
+        $statusText.html(i18n("indicator_free"))
+        $statusText.prop("title", i18n("indicator_free"))
         $("#status-indicator").css("background-color", "transparent")
     }
 }

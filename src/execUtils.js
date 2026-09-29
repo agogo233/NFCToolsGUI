@@ -40,10 +40,14 @@ function exec(msg, cmd, args, processHandler, finishHandler) {
 
             status.isRunningTask = false
             if (code !== 0) {
-                if (signal) printExitLog(2)
+                if (signal) {
+                    sendToMainWindow("update-events", {type: "error", text: i18n("event_task_killed")})
+                    printExitLog(2)
+                }
                 else {
                     const message = `\nexit code: ${code}`
                     printLog(message)
+                    sendToMainWindow("update-events", {type: "error", text: `${i18n("event_task_failed")}${code}`})
                     printExitLog(1)
                     reject(new Error(message))
                 }

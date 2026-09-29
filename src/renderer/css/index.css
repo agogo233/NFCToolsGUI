@@ -1,7 +1,7 @@
 :root {
     --side-bar-width: 40px;
     --bottom-bar-height: 40px;
-    --console-height: 340px;
+    --console-height: 260px;
 }
 
 img {
@@ -217,21 +217,101 @@ select {
     visibility: visible;
 }
 
-.main-button-area {
+#device-status-bar {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 14px;
+    align-items: center;
+    gap: 8px;
+    margin: 46px 25px 0;
+    height: 32px;
+    padding: 0 12px;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+#device-status-indicator {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-disabled-fg);
+}
+
+#device-status-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--fs-sm);
+    color: var(--color-text-secondary);
+}
+
+#guidance-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 25px 0;
+    height: 28px;
+    padding: 0 12px;
+    background-color: var(--color-selected);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+#guidance-text {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--fs-xs);
+    color: var(--color-text);
+}
+
+#guidance-buttons button {
     width: auto;
-    margin: 50px 25px 0;
+    height: 22px;
+    padding: 0 10px;
+    font-size: var(--fs-xs);
+    border-radius: var(--radius-pill);
+    background-color: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+#guidance-buttons button:hover {
+    background-color: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+}
+
+#guidance-bar[hidden] {
+    display: none;
+}
+
+.main-button-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    width: auto;
+    margin: 10px 25px 0;
+}
+
+.button-column {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.column-title {
+    margin-bottom: 4px;
+    text-align: center;
+    font-size: var(--fs-xs);
+    color: var(--color-text-secondary);
 }
 
 .main-button {
     border: none;
-    width: 150px;
-    height: 55px;
+    width: 100%;
+    height: 32px;
     border-radius: var(--radius-md);
-    font-size: var(--fs-md);
+    font-size: var(--fs-sm);
     cursor: pointer;
     vertical-align: middle;
     background-color: var(--color-surface-2);
@@ -245,6 +325,27 @@ select {
     color: var(--color-button-hover-text);
 }
 
+.main-button.primary {
+    height: 40px;
+    font-size: var(--fs-md);
+    background-color: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.main-button.primary:hover {
+    background-color: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+}
+
+.main-button.danger {
+    color: var(--color-danger);
+}
+
+.main-button.danger:hover {
+    background-color: var(--color-danger);
+    color: var(--color-text-inverse);
+}
+
 .bottom-area {
     border-radius: var(--radius-lg);
     position: fixed;
@@ -254,6 +355,50 @@ select {
     bottom: 0;
     background-color: var(--color-console-bg);
     box-shadow: var(--shadow-panel);
+    overflow: hidden;
+}
+
+#event-bar {
+    height: 50px;
+    padding: 4px 12px;
+    overflow-y: auto;
+    background-color: var(--color-surface-2);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    border-bottom: 1px solid var(--color-border);
+}
+
+#event-bar .event-line {
+    overflow: hidden;
+    line-height: 1.6;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#event-bar .event-error {
+    color: var(--color-danger);
+}
+
+#event-bar .event-key {
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+#event-bar .event-success {
+    color: var(--color-keyA);
+}
+
+#progress-bar {
+    height: 4px;
+    background-color: var(--color-border);
+}
+
+#progress-fill {
+    height: 100%;
+    width: 0;
+    background-color: var(--color-primary);
+    transition: width 300ms;
 }
 
 #left-bar {

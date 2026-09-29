@@ -9,6 +9,7 @@ English | [简体中文](https://github.com/GSWXXN/NFCToolsGUI/blob/main/README-
 ## Supported functions
 * Crack card using MFOC
 * Write card
+* Write UFUID UID
 * Format card
 * Lock UFUID
 * HardNested crack
@@ -153,3 +154,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 - [cropto1_bs](https://github.com/vk496/cropto1_bs): HardNested brute-forcer.
 - [libnfc](https://github.com/nfc-tools/libnfc): Platform-independent NFC library.
 - [nfc-mflock](https://github.com/duament/nfc-mflock): A simple utility to lock block0 of UFUID cards.
+- [nfc-mfsetuid](https://github.com/duament/nfc-mflock): A utility to set block0 (UID) of UFUID cards, based on nfc-mflock.

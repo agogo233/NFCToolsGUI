@@ -167,6 +167,43 @@ const actions = {
         ).then(()=>{printExitLog(0)}).catch(() => {})
     },
 
+    // 写 UFUID UID
+    "write-ufuid-uid": () => {
+        dialog.showOpenDialog({
+            title: i18n("dialog_title_choose_dump_need_to_write"),
+            defaultPath: dumpFilesPath,
+            buttonLabel: i18n("dialog_button_open"),
+            filters: [{ name: i18n("file_type_dump"), extensions: ['dump', 'mfd'] }],
+            message: i18n("dialog_msg_choose_dump_file")
+        }).then(result => {
+            if (result["canceled"] === true) return
+            let block0Hex
+            try {
+                block0Hex = fs.readFileSync(result["filePaths"][0]).subarray(0, 16).toString("hex").toUpperCase()
+            } catch (e) {
+                printLog(`\n\n${i18n("log_msg_read_dump_file_failed")}\n`)
+                printExitLog(1)
+                return
+            }
+            if (block0Hex.length !== 32) {
+                printLog(`\n\n${i18n("log_msg_dump_file_too_short")}\n`)
+                printExitLog(1)
+                return
+            }
+            dialog.showMessageBox({
+                type: "warning",
+                buttons: [i18n("dialog_button_cancel"), i18n("dialog_button_ok")],
+                title: i18n("dialog_title_danger_operation"),
+                message: `${i18n("dialog_msg_confirm_write_uid")}${block0Hex}`
+            }).then((response) => {
+                if (response.response === 1) {
+                    printStatus(i18n("indicator_writing_ufuid_uid"))
+                    exec(i18n("log_msg_start_write_ufuid_uid"), "nfc-mfsetuid", ["-q", block0Hex]).then(()=>{printExitLog(0)}).catch(() => {})
+                }
+            })
+        })
+    },
+
     // 锁 UFUID
     "lock-ufuid": () => {
         dialog.showMessageBox({

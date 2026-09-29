@@ -160,6 +160,16 @@ autoreconf -vis
 make && make install
 
 
+# nfc-mfsetuid
+echo
+echo
+echo "============================== nfc-mfsetuid =============================="
+cd "$source"/nfc-mfsetuid
+autoreconf -vis
+./configure LDFLAGS=-L"$prefix"/lib prefix="$prefix" CPPFLAGS=-I"$prefix"/include
+make && make install
+
+
 # libnfc_collect
 echo
 echo
@@ -208,6 +218,7 @@ mv "$prefix"/bin2/nfc-mfdict* "$prefix"/bin
 mv "$prefix"/bin2/mfoc* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mfdetect* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mflock* "$prefix"/bin
+mv "$prefix"/bin2/nfc-mfsetuid* "$prefix"/bin
 mv "$prefix"/bin2/libnfc-collect* "$prefix"/bin
 mv "$prefix"/bin2/cropto1_bs* "$prefix"/bin
 if [ "$os" = "MINGW64" ]; then

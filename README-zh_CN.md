@@ -9,6 +9,7 @@
 ## 支持的功能
 * MFOC 解卡
 * 写卡
+* 写入 UFUID 的 UID
 * 格式化卡片
 * 锁定 UFUID
 * HardNested 破解
@@ -153,3 +154,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 - [cropto1_bs](https://github.com/vk496/cropto1_bs): HardNested 暴力破解器
 - [libnfc](https://github.com/nfc-tools/libnfc): 不依赖平台的 NFC 库
 - [nfc-mflock](https://github.com/duament/nfc-mflock): Mifare Classic 锁定工具
+- [nfc-mfsetuid](https://github.com/duament/nfc-mflock): UFUID 写入 UID 工具，基于 nfc-mflock

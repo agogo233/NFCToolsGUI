@@ -1,0 +1,32 @@
+name: ui-check
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  ui:
+    name: UI layout regression
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install UI test system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0 libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libcups2 libdbus-1-3 libgbm1 libxcomposite1 libxdamage1 libxkbcommon0 libxss1 libxtst6 fonts-noto-cjk
+          sudo apt-get install -y libasound2 || sudo apt-get install -y libasound2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run UI layout regression tests
+        run: npm run test:ui

@@ -281,8 +281,9 @@ const collectCode = (page) => `((payload) => {
 const commonChecks = (page, m, ctx) => {
     const out = []
     // 数据页(dump 系列)内容按设计可滚动, 文档级不溢出仅对固定布局页硬失败
-    out.push({name: "overflow-v", ok: m.scrollH <= m.clientH, detail: `scrollH ${m.scrollH} vs clientH ${m.clientH}`, hard: !page.scrollable})
-    out.push({name: "overflow-h", ok: m.scrollW <= m.clientW, detail: `scrollW ${m.scrollW} vs clientW ${m.clientW}`, hard: !page.scrollable})
+    // 固定页允许 +TOL 的跨环境字体度量漂移(真实回归以 10px+ 计)
+    out.push({name: "overflow-v", ok: m.scrollH <= m.clientH + TOL, detail: `scrollH ${m.scrollH} vs clientH ${m.clientH} (tol +${TOL})`, hard: !page.scrollable})
+    out.push({name: "overflow-h", ok: m.scrollW <= m.clientW + TOL, detail: `scrollW ${m.scrollW} vs clientW ${m.clientW} (tol +${TOL})`, hard: !page.scrollable})
     out.push({name: "no-placeholder", ok: !m.placeholder, detail: m.placeholder ? "found literal {{ }} residue" : "no {{ }} residue", hard: true})
     for (const sel of page.lists || []) {
         for (const r of m.lists[sel] || []) {

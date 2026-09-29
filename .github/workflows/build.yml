@@ -17,6 +17,9 @@ jobs:
       matrix:
         os: [ windows-latest ]
 
+    permissions:
+      contents: write
+
     steps:
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
@@ -59,3 +62,20 @@ jobs:
         with:
           name: NFCToolsGUI-${{ runner.os }}-${{ runner.arch }}
           path: upload
+
+      - name: Force-update "latest" tag
+        shell: bash
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Replace release assets
+        shell: bash
+        run: |
+          gh release delete latest -y >/dev/null 2>&1 || true
+          gh release create latest upload/*.zip \
+            --title "CI build $(git rev-parse --short HEAD)" \
+            --notes "Auto-built by cloud CI on $(date +%Y-%m-%d)" \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

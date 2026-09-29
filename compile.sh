@@ -161,6 +161,9 @@ make && make install
 
 
 # nfc-mfsetuid
+# libnfc ships an example with the same name (examples/nfc-mfsetuid.c), installed into
+# "$prefix"/bin by the libnfc step. Keep this step after libnfc so our version wins.
+# libnfc only builds that example through cmake, so it only exists on the MINGW64 path.
 echo
 echo
 echo "============================== nfc-mfsetuid =============================="

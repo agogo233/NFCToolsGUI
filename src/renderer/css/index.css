@@ -151,6 +151,7 @@ select {
     top: 38px;
     min-width: 170px;
     display: none;
+    -webkit-app-region: none;
     border-radius: var(--radius-md);
     overflow-y: scroll;
     min-height: 42px;

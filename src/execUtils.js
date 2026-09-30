@@ -8,7 +8,10 @@ const path = require("path");
 let task = null
 const binPath = app.isPackaged ? path.join(process.resourcesPath, "./framework/bin/") : path.join(__dirname, "../framework/bin/")
 
-function exec(msg, cmd, args, processHandler, finishHandler) {
+// stderrHandler 可选: 只有"设备打开失败"这类诊断走 stderr (libnfc 的 ERR -> warnx -> stderr),
+// 其余要检测的字符串都由工具打印到 stdout。默认不把 stderr 交给 processHandler,
+// 否则 libnfc 的诊断碎片会被拼进 stdout 未完成的行里, 破坏按行缓冲的解析。
+function exec(msg, cmd, args, processHandler, finishHandler, stderrHandler) {
     return new Promise((resolve, reject) => {
         if (status.currentDevice === null || (!status.isDeviceConnected && cmd !== "nfc-list")) {
             printStatus(i18n("indicator_error"), "error")
@@ -45,7 +48,7 @@ function exec(msg, cmd, args, processHandler, finishHandler) {
 
         task.stderr.on('data', (data) => {
             printLog(`\n${data.toString()}`)
-            if (processHandler) processHandler(data.toString())
+            if (stderrHandler) stderrHandler(data.toString())
         });
 
         task.on('close', (code, signal) => {

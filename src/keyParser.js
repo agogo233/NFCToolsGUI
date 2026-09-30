@@ -36,4 +36,16 @@ function createKeyInfoParser() {
     }
 }
 
-module.exports = {createKeyInfoParser}
+// 通用按行缓冲: stdout 一次喂进来的字节数与行边界无关, 跨块的行必须先拼完整再解析。
+// 与 Tauri 侧 task.rs 的 BufReader::lines() 行为对齐。
+function createLineSplitter() {
+    let buffer = ""
+    return (chunk) => {
+        buffer += chunk
+        const lines = buffer.split("\n")
+        buffer = lines.pop()
+        return lines
+    }
+}
+
+module.exports = {createKeyInfoParser, createLineSplitter}

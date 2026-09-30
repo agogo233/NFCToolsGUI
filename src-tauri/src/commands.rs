@@ -56,7 +56,11 @@ pub fn bin_dir() -> PathBuf {
     if cfg!(debug_assertions) {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../framework/bin").to_path_buf()
     } else {
-        exe_dir().map(|dir| dir.join("framework").join("bin")).unwrap_or_default()
+        // 退回当前工作目录而不是空 PathBuf: 空的基准会让 spawn 按相对路径查找,
+        // 报出的 ENOENT 里连真实路径都没有, 排查不了
+        exe_dir()
+            .map(|dir| dir.join("framework").join("bin"))
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 }
 
@@ -64,7 +68,9 @@ pub fn dict_path() -> PathBuf {
     if cfg!(debug_assertions) {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../dict.dic").to_path_buf()
     } else {
-        exe_dir().map(|dir| dir.join("dict.dic")).unwrap_or_default()
+        exe_dir()
+            .map(|dir| dir.join("dict.dic"))
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 }
 
@@ -102,7 +108,14 @@ struct Paths {
 pub fn data_dir(app: &AppHandle) -> PathBuf {
     let dir = match std::env::var_os("APPDATA") {
         Some(roaming) => PathBuf::from(roaming).join("NFCToolsGUI"),
-        None => app.path().app_data_dir().unwrap_or_default(),
+        // 拿不到应用数据目录时退回临时目录下的独立子目录: 空的 PathBuf 会让
+        // create_dir_all 失败, 之后所有路径都退化成相对当前工作目录, 密钥和 dump
+        // 会写到错误位置。不直接用 temp_dir() 根目录, 否则密钥会和系统临时目录
+        // 里其它文件混在一起, 且会被系统定期清理。
+        None => app
+            .path()
+            .app_data_dir()
+            .unwrap_or_else(|_| std::env::temp_dir().join("NFCToolsGUI")),
     };
     std::fs::create_dir_all(&dir).ok();
     dir

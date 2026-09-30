@@ -6,7 +6,7 @@ const status = require("./status")
 const { SerialPort } = require('serialport')
 const path = require("path")
 const { i18n } = require('./i18n')
-const { createKeyInfoParser } = require('./keyParser')
+const { createKeyInfoParser, createLineSplitter } = require('./keyParser')
 
 const {
     createDumpHistoryWindow,
@@ -119,6 +119,7 @@ const actions = {
                 readICThenExec(
                     i18n("log_msg_start_write_card"), i18n("indicator_writing_ic_card"), true,
                     "nfc-mfclassic", ["w", "A", "u", mfdFilePath, tempMFDFilePath, "f"],
+                    null,
                     (code) => {
                         printLog(`\n\n${code === 0 ? i18n("log_msg_write_success") : i18n("log_msg_write_failed")}\n`)
                     }
@@ -278,6 +279,7 @@ const actions = {
     },
     "run-hard-nested": (configs) => {
         let uid, sector, keyType
+        const nextCollectLine = createLineSplitter()
         configs.knownSector = (parseInt(configs.knownSector) + 1) * 4 - 1
         configs.targetSector = (parseInt(configs.targetSector) + 1) * 4 - 1
         if (!configs.autoRun) totalUnknownKeys = unknownKeyInfo.length
@@ -296,17 +298,18 @@ const actions = {
                 noncesFilesPath
             ],
             (value) => {
-                let i = value.indexOf("Found tag with uid ")
-                if (i >= 0) {
-                    uid = value.substring(i + 19, i + 27)
-                    i = value.indexOf("collecting nonces for key")
-                    if (i >= 0) {
-                        const pattern = /\(sector (\d{1,2})\)/;
-                        const match = pattern.exec(value);
-                        // 必须是数字, unknownKeyInfo 里的扇区号是 parseInt 出来的, 用字符串比永远不相等
-                        if (match) sector = parseInt(match[1])
-                        keyType = value.substring(i + 26, i + 27)
-                    }
+                // 三个子串来自 libnfc-collect 的同一条 printf, 必须按整行解析:
+                // 分块切在行中间会导致 sector/keyType 取不到, 待解队列永不缩短
+                for (const line of nextCollectLine(value)) {
+                    let i = line.indexOf("Found tag with uid ")
+                    if (i < 0) continue
+                    uid = line.substring(i + 19, i + 27)
+                    i = line.indexOf("collecting nonces for key")
+                    if (i < 0) continue
+                    const match = /\(sector (\d{1,2})\)/.exec(line)
+                    // 必须是数字, unknownKeyInfo 里的扇区号是 parseInt 出来的, 用字符串比永远不相等
+                    if (match) sector = parseInt(match[1])
+                    keyType = line.substring(i + 26, i + 27)
                 }
             },
             () => {
@@ -792,12 +795,14 @@ function setNFCConfig() {
                     printLog(`\n*** ${i18n("log_msg_discover_device")} ***\n`)
                     status.isDeviceConnected = true
                 }
+            },
+            settle,
+            (value) => {
                 if (value.indexOf("Unable to open NFC device") >= 0) {
                     printLog(`\n*** ${i18n("log_msg_not_found_device")} ***\n`)
                     status.isDeviceConnected = false
                 }
             },
-            settle,
         ).then(()=>{printExitLog(0)}).catch(() => {settle()})
     })
 }

@@ -69,7 +69,6 @@ $editDumpButton.click(() => {
     const $selectedDump = $('#dumpsList .selected');
     if ($selectedDump.length) {
         const dumpId = $selectedDump.text();
-        console.log(dumpId)
         window["electronAPI"].execAction('open-dump-editor', dumpId);
     }
 });
@@ -79,7 +78,6 @@ $compareDumpsButton.click(() => {
     if ($selectedDumps.length === 2) {
         const dumpId1 = $selectedDumps.eq(0).text();
         const dumpId2 = $selectedDumps.eq(1).text();
-        console.log(dumpId1, dumpId2)
         window["electronAPI"].execAction('open-dump-comparator', {A: dumpId1, B: dumpId2});
     }
 });

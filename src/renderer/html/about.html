@@ -68,7 +68,8 @@
     link.addEventListener('click', e => {
       const url = link.getAttribute('href');
       e.preventDefault();
-      window.electronAPI.openLink(url);
+      // 非 https 链接会被主进程拒绝, 吃掉 rejection 免得在 webview 控制台刷红
+      window.electronAPI.openLink(url).catch(() => {});
     });
   });
 </script>

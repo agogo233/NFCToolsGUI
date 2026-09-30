@@ -1,6 +1,6 @@
 // 密钥输出解析的回归测试: node test/parse/keyParser.test.js
 // 重点验证"分块不变性" —— stdout 一次喂进来的字节数与扇区边界无关。
-const {createKeyInfoParser} = require("../../src/keyParser")
+const {createKeyInfoParser, createLineSplitter} = require("../../src/keyParser")
 
 let failed = 0
 function check(name, cond, extra) {
@@ -153,6 +153,31 @@ console.log("[parse] 6. 旧实现对照 (预期: 分块后与整块不一致)")
         JSON.stringify(fresh.unknown) === JSON.stringify(base.unknown))
     check("新实现 分块 2048B: 已知序列与整块一致",
         JSON.stringify(fresh.known) === JSON.stringify(base.known))
+}
+
+console.log("[parse] 6. 通用按行缓冲器的分块不变性")
+{
+    // libnfc-collect 的真实输出 (source/libnfc-collect/libnfc-collect.c:709),
+    // 三个待检测子串都在这一条里, 跨块切开会全部取不到
+    const collectOutput =
+        "Found tag with uid 1a2b, collecting nonces for key B of block 15 (sector 3) using known key A ffffffffffff for block 0 (sector 0)\n" +
+        "Found tag with uid 1a2b, collecting nonces for key A of block 7 (sector 1) using known key A ffffffffffff for block 0 (sector 0)\n"
+    const base = (() => {
+        const next = createLineSplitter()
+        const out = []
+        for (const line of next(collectOutput)) out.push(line)
+        return out
+    })()
+    eq("整块输入: 得到 2 行", base.length, 2)
+    for (const size of [1, 7, 64, 150, 151, 152, 512]) {
+        const next = createLineSplitter()
+        const out = []
+        for (const chunk of split(collectOutput, size)) out.push(...next(chunk))
+        eq(`分块 ${size}B: 行序列与整块一致`, out, base)
+    }
+    const next = createLineSplitter()
+    eq("末尾无换行的半行不产出", next("abc"), [])
+    eq("补上换行后产出该行", next("def\n"), ["abcdef"])
 }
 
 console.log(failed === 0 ? "[parse] PASSED" : `[parse] FAILED (${failed})`)

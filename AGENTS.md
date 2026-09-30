@@ -10,6 +10,17 @@ Only four npm scripts exist (`start`, `package`, `make`, `test:ui`) — **there 
 - `compile.sh` prereqs (see README): Linux `apt-get install curl autoconf libtool pkg-config patchelf liblzma-dev libreadline-dev`; macOS `brew install autoconf automake libtool pkg-config`; Windows must run under MSYS2 mingw64. It deletes `framework/`, extracts vendored archives from `vendor/` (the macOS libusb-legacy binary is still downloaded from R2), and rewrites rpaths via `patchelf`/`install_name_tool` — slow, don't run casually.
 - CI uses Node 24.x; `package-lock.json` is authoritative (`npm ci`).
 
+## Tauri branch (`tauri`)
+
+The `tauri` branch carries a Windows-only Tauri 2 rewrite of the main process. `src/renderer/` is byte-identical to `main`; the Electron files are kept only as the behavioural reference.
+
+- `src-tauri/src/main.rs` — Tauri setup, close-guard, command registration. `src-tauri/src/commands.rs` — the `actions` map equivalent (`run_action`), all tool orchestration, dialogs and file IO. `src-tauri/src/task.rs` — spawns the C tools, `hidden_command` adds `CREATE_NO_WINDOW` so no console flashes.
+- **The renderer's `electronAPI`/`darkMode` now comes from `src-tauri/src/embedded.js`**, injected into every webview via `initialization_script` (`src-tauri/src/windows.rs`). `src/preload.js` is Electron-only — editing it does **not** affect the Tauri build, and editing `embedded.js` does **not** affect Electron. Keep both in sync when adding a bridge method or event channel.
+- Windows-only: `explorer.exe`/`notepad.exe` are hardcoded, `data_dir` is `%APPDATA%\NFCToolsGUI`, locale is `zh-CN` or `en` only.
+- **Never run `cargo check`/`build`/`test` locally** — no Rust toolchain is installed and the Tauri build needs the MSYS2/mingw64 `compile.sh` output. Verification is the `tauri-build` workflow: push to `tauri` and poll it.
+- Build order mirrors `compile.sh` → `cargo build --release`; `.github/workflows/tauri.yml` zips `nfctoolsgui.exe` + `framework/` + `dict.dic` by hand (`bundle.active=false`, no `cargo tauri build`). Release-mode `bin_dir()`/`dict_path()` resolve relative to the exe dir, so that zip layout is load-bearing.
+- `src-tauri/Cargo.lock` is not committed; dependency versions float until it is added.
+
 ## Layout
 
 - `src/main.js` — main-process entry. `src/command.js` — the `actions` map; every UI action lands here (`renderer execAction('name', arg)` → `ipcMain 'exec-action'` → `actions[action](arg)`).
@@ -30,6 +41,7 @@ Only four npm scripts exist (`start`, `package`, `make`, `test:ui`) — **there 
 ## CI / release
 
 - `.github/workflows/build.yml` builds on push to `main` (windows-only matrix, `paths-ignore` for `doc/**`, `README*`, `.github/**`) and manual `workflow_dispatch`, checking out submodules recursively.
+- `.github/workflows/tauri.yml` is the `tauri`-branch build: MSYS2 → `compile.sh` → `cargo build --release` → hand-made zip → artifact → same force-move of the fixed `latest` tag/release.
 - After a successful build, the workflow force-updates the fixed `latest` tag to the build commit, deletes the previous `latest` release (tag kept), and re-creates it uploading `upload/*.zip` directly as release assets (no nested zips), marked as the latest release. Manual dispatches publish too.
 - `test/ui` (harness at `test/ui/runner.js`, npm script `test:ui`) is a UI layout regression check run by the `ui` job in `.github/workflows/ui.yml`. It drives each HTML page with the real `preload.js` against a stubbed IPC main (`test/ui/main.js`) and asserts element geometry. Runs without `framework/bin/` or an NFC device; Linux needs `xvfb-run` plus GTK/NSS/asound CJK-font deps (see the CI step for the exact list). Looping languages: `UI_LANGS="zh-CN,en" npm run test:ui` (default).
 

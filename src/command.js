@@ -6,6 +6,7 @@ const status = require("./status")
 const { SerialPort } = require('serialport')
 const path = require("path")
 const { i18n } = require('./i18n')
+const { createKeyInfoParser } = require('./keyParser')
 
 const {
     createDumpHistoryWindow,
@@ -39,6 +40,7 @@ const dumpsFolder = path.join(userDataPath, "./dumpfiles")
 let newKeys = []
 let knownKeyInfo = []
 let unknownKeyInfo = []
+let keyInfoParser = createKeyInfoParser()
 let totalUnknownKeys = 0
 let mfocStartTime = 0
 let mfocKeysDone = 0
@@ -152,7 +154,8 @@ const actions = {
     "input-keys-read-IC": () => {createInputKeysWindow("done-input-keys-read-IC")},
     "done-input-keys-read-IC": (keys) => {
         const keyArg = []
-        keys.match(/[0-9A-Fa-f]{12}/g).forEach(key => {
+        // 输入框被清空或内容不含 12 位 hex 时 match 返回 null, 直接 forEach 会抛异常
+        ;(keys.match(/[0-9A-Fa-f]{12}/g) || []).forEach(key => {
             keyArg.push(`-k${key}`)
         })
         printStatus(i18n("indicator_reading_ic_card"))
@@ -162,8 +165,7 @@ const actions = {
     // 检测卡片类型
     "detect-card-type": () => {
         checkKeyFileExist()
-        knownKeyInfo = []
-        unknownKeyInfo = []
+        resetKeyInfo()
         printStatus(i18n("indicator_detecting_ic_card"))
         exec(
             i18n("log_msg_start_detect_card"),
@@ -301,7 +303,8 @@ const actions = {
                     if (i >= 0) {
                         const pattern = /\(sector (\d{1,2})\)/;
                         const match = pattern.exec(value);
-                        if (match) sector = match[1]
+                        // 必须是数字, unknownKeyInfo 里的扇区号是 parseInt 出来的, 用字符串比永远不相等
+                        if (match) sector = parseInt(match[1])
                         keyType = value.substring(i + 26, i + 27)
                     }
                 }
@@ -319,9 +322,7 @@ const actions = {
                     } else {
                         fs.rename(noncesFilesPath, url, (err) => {
                             if (err) {
-                                printLog(i18n("log_msh_save_failed"))
-                                printExitLog(1)
-                                throw err
+                                reportIOError(err)
                             }
                             else {
                                 printLog(  `\n\n${i18n("log_msg_file_already_saved_to")} ${url}\n`)
@@ -334,6 +335,7 @@ const actions = {
                 if (!configs.collectOnly)  {
                     sendHardNestedProgress()
                     printStatus(`${i18n("indicator_doing_hard_nested")} - ${totalUnknownKeys - unknownKeyInfo.length + 1}/${totalUnknownKeys}`)
+                    let foundKey = false
                     exec(
                         i18n("lod_msg_start_hard_nested"),
                         "cropto1_bs", [noncesFilesPath],
@@ -342,12 +344,20 @@ const actions = {
                             if (i >= 0) {
                                 i += 11
                                 const key = value.substring(i, i + 12)
+                                if (!key) return
+                                foundKey = true
                                 saveKeys([key])
                                 if (unknownKeyInfo.length === 0) return
                                 if (unknownKeyInfo[0][0] === sector && unknownKeyInfo[0][1] === keyType) unknownKeyInfo.shift()
                             }
                         }).then(() => {
                             if (configs.autoRun) {
+                                // 一轮下来没解出任何密钥时继续递归只是反复采集同一批 nonce, 空转占用读卡器
+                                if (!foundKey) {
+                                    printLog(`\n${i18n("log_msg_no_hard_nested_progress")}\n`)
+                                    printExitLog(0)
+                                    return
+                                }
                                 execAction("hard-nested-config-done", {
                                     knownKey: knownKeyInfo[0][0],
                                     knownSector: knownKeyInfo[0][1],
@@ -421,7 +431,7 @@ const actions = {
             message: i18n("dialog_msg_choose_dump_file"),
         })[0]
         fs.readFile(filePaths, (err, data) => {
-            if (err) throw err;
+            if (err) {reportIOError(err); return}
             const hexDataArray = Array.from(new Uint8Array(data), function(byte) {
                 return ('0' + (byte & 0xff).toString(16)).slice(-2);
             }).join('').match(/.{1,32}/g);
@@ -438,7 +448,7 @@ const actions = {
         const save = (url) => {
             fs.writeFile(url, binaryArray, (error) => {
                 if (error) {
-                    throw error
+                    reportIOError(error)
                 } else {
                     sentToDumpEditorWindow('saved-binary-data', {url})
                 }
@@ -475,7 +485,7 @@ const actions = {
             message: i18n("dialog_msg_choose_dump_file"),
         })[0]
         fs.readFile(filePaths, (err, data) => {
-            if (err) throw err;
+            if (err) {reportIOError(err); return}
             const hexDataArray = Array.from(new Uint8Array(data), function(byte) {
                 return ('0' + (byte & 0xff).toString(16)).slice(-2);
             }).join('').match(/.{1,32}/g);
@@ -514,7 +524,7 @@ const actions = {
         if (confirmDelete === 0) { // 用户点击 Yes
             files.forEach((file) => {
                 fs.unlink(path.join(dumpsFolder, file), (err) => {
-                    if (err) throw err;
+                    if (err) {reportIOError(err); return}
                     updateDumpFiles()
                 });
             });
@@ -524,7 +534,7 @@ const actions = {
     "rename-dump-file": (fileObj) => {
         const { oldName, newName } = fileObj;
         fs.rename(path.join(dumpsFolder, oldName), path.join(dumpsFolder, newName), (err) => {
-            if (err) throw err;
+            if (err) {reportIOError(err); return}
             updateDumpFiles()
         });
     },
@@ -548,9 +558,7 @@ const actions = {
         } else {
             fs.writeFile(url, content, (err) => {
                 if (err) {
-                    printLog(i18n("log_msh_save_failed"))
-                    printExitLog(1)
-                    throw err
+                    reportIOError(err)
                 }
                 else {
                     printLog(`\n\n${i18n("log_msg_file_already_saved_to")} ${url}\n`)
@@ -561,6 +569,14 @@ const actions = {
     },
     // about page
     "open-about": createAboutWindow
+}
+
+// 异步回调里 throw 会被 Node 当作 uncaughtException 直接终止主进程, 连带丢掉用户
+// 正在编辑的 dump 和正在跑的日志。所有 fs 回调的错误都走这里, 改成写日志。
+function reportIOError(err) {
+    console.error(err)
+    printLog(`\n${i18n("log_msg_operation_failed")} ${err && err.message ? err.message : String(err)}\n`)
+    printExitLog(1)
 }
 
 // 保存密钥
@@ -584,9 +600,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
     let isCmdFunc = true
     if (arguments.length === 4) isCmdFunc = false
     checkKeyFileExist()
-    newKeys = []
-    knownKeyInfo = []
-    unknownKeyInfo = []
+    resetKeyInfo()
     printStatus(isSaveDumpFile ? i18n("indicator_backing_up_current_card") : i18n("indicator_detecting_ic_card"))
     exec(
         i18n("log_msg_read_ic_then_execute"),
@@ -608,7 +622,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
             exec(msg, cmd, args, processHandler, (code, signal)=>{
                 if (finishHandler) finishHandler(code, signal)
                 fs.unlink(tempMFDFilePath, (err) => {
-                    if(err) throw err;
+                    if (err) console.error(err)
                 })
             }).then(()=>{printExitLog(0)}).catch(() => {})
         }).catch(() => {})
@@ -617,9 +631,7 @@ function readICThenExec(msg, statusMsg, isSaveDumpFile, cmd, args, processHandle
 // 执行MFOC解密
 function mfoc(args) {
     let cardID = null
-    newKeys = []
-    knownKeyInfo = []
-    unknownKeyInfo = []
+    resetKeyInfo()
     checkKeyFileExist()
 
     // 预估剩余时长: 字典攻击总轮数 = 内置默认密钥 + 密钥文件密钥 + -k 密钥
@@ -653,7 +665,7 @@ function mfoc(args) {
             }
             if (fs.statSync(tempMFDFilePath).size === 0) {
                 fs.unlink(tempMFDFilePath, (err) => {
-                    if (err) throw err
+                    if (err) console.error(err)
                 })
                 printLog(`\n${i18n("log_msg_dump_empty_not_saved")}\n`)
                 return
@@ -725,22 +737,24 @@ function formatDuration(sec) {
 }
 
 // 统计密钥信息
+// stdout 分块边界与扇区边界无关, 因此解析器按行缓冲并直接捕获工具打印的扇区号,
+// 不能用匹配序号反推 —— 详见 src/keyParser.js 与 test/parse/keyParser.test.js
+function resetKeyInfo() {
+    keyInfoParser = createKeyInfoParser()
+    newKeys = []
+    knownKeyInfo = []
+    unknownKeyInfo = []
+}
+
 function keyInfoStatistic(content) {
-
-    //match [ Unknown Key A] or [ Found   Key B: ffffffffffff]
-    const matchStatus = content.match(/ (\w{5}|\w{7})\s+Key \w(: \w{12}|)/g)
-    if (!matchStatus) return
-
-    matchStatus.forEach((matchStr, i) => {
-        const sector = parseInt(`${i / 2}`)
-        if (matchStr[1] === "F") {
-            const key = matchStr.substring(16, 28)
-            knownKeyInfo.push([key, sector, matchStr[13]])
-            newKeys.join(key)
-        } else if (matchStr[1] === "U") {
-            unknownKeyInfo.push([sector, matchStr[13]])
+    for (const record of keyInfoParser.push(content)) {
+        if (record.key === null) {
+            unknownKeyInfo.push([record.sector, record.type])
+        } else {
+            knownKeyInfo.push([record.key, record.sector, record.type])
+            newKeys.push(record.key)
         }
-    })
+    }
 }
 
 // 检查密钥文件是否存在
@@ -752,8 +766,25 @@ function checkKeyFileExist() {
 function setNFCConfig() {
     sendToMainWindow("setting-nfc-config", "start")
     const content = `device.name = "NFC_Device"\ndevice.connstring = "pn532_uart:${status.currentDevice}:${status.currentSpeed}"`
+    // 无论成功、被拒绝还是被中断, 都要把"正在配置"状态收尾, 否则渲染端的下拉框会一直禁用
+    let settled = false
+    const settle = () => {
+        if (settled) return
+        settled = true
+        const connected = status.isDeviceConnected
+        sendToMainWindow("setting-nfc-config", connected ? "success" : "failed")
+        sendToMainWindow("update-device-status", {
+            state: connected ? "connected" : "failed",
+            device: status.currentDevice
+        })
+    }
     fs.writeFile(nfcConfigFilePath, content, (err) => {
-        if (err) throw err
+        if (err) {
+            printLog(`\n${err.message}\n`)
+            status.isDeviceConnected = false
+            settle()
+            return
+        }
         exec(i18n("log_msg_start_connect_device"),
             "nfc-list", [],
             (value) => {
@@ -766,14 +797,8 @@ function setNFCConfig() {
                     status.isDeviceConnected = false
                 }
             },
-            () => {
-                sendToMainWindow("setting-nfc-config", status.isDeviceConnected ? "success" : "failed")
-                sendToMainWindow("update-device-status", {
-                    state: status.isDeviceConnected ? "connected" : "failed",
-                    device: status.currentDevice
-                })
-            },
-        ).then(()=>{printExitLog(0)}).catch(() => {})
+            settle,
+        ).then(()=>{printExitLog(0)}).catch(() => {settle()})
     })
 }
 

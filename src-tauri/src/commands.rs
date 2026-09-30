@@ -30,9 +30,16 @@ pub const DEFAULT_KEYS: [&str; 13] = [
     "8fd0a4f256e9",
 ];
 
+// 扇区号由工具自己打印, 直接捕获; 不用匹配序号反推 (序号只在单次输出内连续,
+// 一旦上游增删行就会整体错位)。与 src/keyParser.js 保持一致。
+fn key_sector_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"Sector\s+(\d+)\s*-\s*(?:Found|Unknown)\s+Key\s+[AB]").unwrap())
+}
+
 fn key_info_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r" (\w{5}|\w{7})\s+Key \w(: \w{12}|)").unwrap())
+    RE.get_or_init(|| Regex::new(r"(Found|Unknown)\s+Key\s+([AB]):?\s*([0-9a-fA-F]{12})?").unwrap())
 }
 
 fn hex12_re() -> &'static Regex {
@@ -324,21 +331,23 @@ fn save_keys(app: &AppHandle, state: &Mutex<AppState>, new_keys: &[String]) {
 }
 
 fn key_info_statistic(state: &mut AppState, line: &str) {
+    if let Some(caps) = key_sector_re().captures(line) {
+        state.key_sector = caps.get(1).and_then(|m| m.as_str().parse::<i64>().ok());
+    }
+    let Some(sector) = state.key_sector else {
+        return;
+    };
     for caps in key_info_re().captures_iter(line) {
-        let full = caps.get(0).unwrap().as_str();
-        let word = caps.get(1).unwrap().as_str();
-        let sector = state.key_index / 2;
-        state.key_index += 1;
-        let key_type = full.get(13..14).unwrap_or("").to_string();
-        match word.chars().next() {
-            Some('F') => {
-                let key = full.get(16..28).unwrap_or_default().to_string();
-                state.known_key_info.push((key, sector, key_type));
+        let key_type = caps.get(2).map(|m| m.as_str()).unwrap_or_default().to_string();
+        let key = caps.get(3).map(|m| m.as_str()).map(str::to_lowercase);
+        if caps.get(1).map(|m| m.as_str()) == Some("Found") {
+            // Found 但没抓到完整 12 位 hex 时跳过, 不把残缺结果当成已知密钥
+            if let Some(key) = key {
+                state.known_key_info.push((key.clone(), sector, key_type));
+                state.new_keys.push(key);
             }
-            Some('U') => {
-                state.unknown_key_info.push((sector, key_type));
-            }
-            _ => {}
+        } else {
+            state.unknown_key_info.push((sector, key_type));
         }
     }
 }
@@ -924,8 +933,18 @@ fn hard_nested_config_done(
     if cfg.auto_run {
         auto_hard_nested(app, state, tasks, true);
     } else {
-        run_hard_nested_once(app, state, tasks, &cfg, true);
+        let _ = run_hard_nested_once(app, state, tasks, &cfg, true);
     }
+}
+
+/// run_hard_nested_once 在自动模式下的结果, 供 auto_hard_nested 决定是否继续下一轮
+enum AutoStep {
+    /// 本轮解出了新密钥, 可以继续
+    Progress,
+    /// 本轮一无所获, 继续下去只是反复采集同一批 nonce, 空转占用读卡器
+    NoProgress,
+    /// 流程已自行收尾 (非自动模式 / 任务失败), 调用方不要再动
+    Done,
 }
 
 fn run_hard_nested_once(
@@ -934,7 +953,7 @@ fn run_hard_nested_once(
     tasks: &Mutex<TaskManager>,
     cfg: &HardConfig,
     reset_total: bool,
-) -> bool {
+) -> AutoStep {
     let p = paths(app);
     let mut cfg = cfg.clone();
     cfg.known_sector = (cfg.known_sector + 1) * 4 - 1;
@@ -989,7 +1008,7 @@ fn run_hard_nested_once(
         &mut |_code| {},
     );
     let Ok(outcome) = outcome else {
-        return false;
+        return AutoStep::Done;
     };
     if cfg.collect_only {
         let mut rename_failed = false;
@@ -1031,10 +1050,10 @@ fn run_hard_nested_once(
         } else if outcome == TaskOutcome::Success {
             exit_success(app, state);
         }
-        return false;
+        return AutoStep::Done;
     }
     if outcome != TaskOutcome::Success {
-        return false;
+        return AutoStep::Done;
     }
     send_hard_nested_progress(app, state);
     let progress = {
@@ -1053,6 +1072,7 @@ fn run_hard_nested_once(
     let target_sector = ctx.sector.as_ref().and_then(|value| value.parse::<i64>().ok());
     let target_key_type = ctx.key_type.clone();
     let crack_msg = t(state, "lod_msg_start_hard_nested");
+    let mut found_key = false;
     let crack = run_task(
         app,
         state,
@@ -1068,6 +1088,7 @@ fn run_hard_nested_once(
                 if key.is_empty() {
                     return;
                 }
+                found_key = true;
                 save_keys(app, state, &[key.clone()]);
                 let mut s = state.lock().unwrap();
                 if !s.unknown_key_info.is_empty()
@@ -1083,13 +1104,17 @@ fn run_hard_nested_once(
     match crack {
         Ok(TaskOutcome::Success) => {
             if cfg.auto_run {
-                true
+                if found_key {
+                    AutoStep::Progress
+                } else {
+                    AutoStep::NoProgress
+                }
             } else {
                 exit_success(app, state);
-                false
+                AutoStep::Done
             }
         }
-        _ => false,
+        _ => AutoStep::Done,
     }
 }
 
@@ -1166,8 +1191,17 @@ fn auto_hard_nested(
             state,
             &format!("{}{}", t(state, "indicator_doing_hard_nested"), progress),
         );
-        if !run_hard_nested_once(app, state, tasks, &cfg, false) {
-            return;
+        match run_hard_nested_once(app, state, tasks, &cfg, false) {
+            AutoStep::Progress => {}
+            AutoStep::NoProgress => {
+                print_log(
+                    app,
+                    &format!("\n{}\n", t(state, "log_msg_no_hard_nested_progress")),
+                );
+                exit_success(app, state);
+                return;
+            }
+            AutoStep::Done => return,
         }
     }
 }
@@ -1319,6 +1353,16 @@ fn grouped_hex(bytes: &[u8], join_rows: bool) -> Value {
     }
 }
 
+// 用户可见的文件操作失败不能静默 return, 否则用户点了保存/删除却毫无反应。
+// 与 Electron 侧 command.js 的 reportIOError 保持一致。
+fn io_fail(app: &AppHandle, state: &Mutex<AppState>, err: std::io::Error) {
+    print_log(
+        app,
+        &format!("\n{} {}\n", t(state, "log_msg_operation_failed"), err),
+    );
+    log_exit(app, state, 1);
+}
+
 fn dump_editor_choose_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     let path = match arg.as_str() {
         Some(name) => PathBuf::from(name),
@@ -1337,7 +1381,10 @@ fn dump_editor_choose_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value
     };
     let bytes = match std::fs::read(&path) {
         Ok(data) => data,
-        Err(_) => return,
+        Err(err) => {
+            io_fail(app, state, err);
+            return;
+        }
     };
     let data = grouped_hex(&bytes, true);
     app.emit_to(
@@ -1372,7 +1419,8 @@ fn dump_editor_save(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     } else {
         PathBuf::from(url)
     };
-    if let Err(_) = std::fs::write(&target, &bytes) {
+    if let Err(err) = std::fs::write(&target, &bytes) {
+        io_fail(app, state, err);
         return;
     }
     app.emit_to(
@@ -1451,7 +1499,9 @@ fn delete_dump(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     }
     let p = paths(app);
     for file in files {
-        let _ = std::fs::remove_file(p.dump_files.join(file));
+        if let Err(err) = std::fs::remove_file(p.dump_files.join(file)) {
+            io_fail(app, state, err);
+        }
     }
     update_dump_files(app);
 }
@@ -1463,14 +1513,14 @@ fn rename_dump_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
         return;
     }
     let p = paths(app);
-    if std::fs::rename(
+    if let Err(err) = std::fs::rename(
         p.dump_files.join(old_name),
         p.dump_files.join(new_name),
-    )
-    .is_ok()
-    {
-        update_dump_files(app);
+    ) {
+        io_fail(app, state, err);
+        return;
     }
+    update_dump_files(app);
 }
 
 fn save_log(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
@@ -1535,12 +1585,34 @@ fn set_nfc_config(
     let content = format!(
         "device.name = \"NFC_Device\"\ndevice.connstring = \"pn532_uart:{device}:{speed}\""
     );
-    if let Err(_) = std::fs::write(dir.join("libnfc.conf"), content) {
+    if std::fs::write(dir.join("libnfc.conf"), content).is_err() {
+        state.lock().unwrap().device_connected = false;
         app.emit("setting-nfc-config", "failed").ok();
+        app.emit(
+            "update-device-status",
+            json!({ "state": "failed", "device": device }),
+        )
+        .ok();
         return;
     }
     let mut found: Option<bool> = None;
     let msg = t(state, "log_msg_start_connect_device");
+    // 无论任务被拒绝(设备忙)还是正常结束, 都要收尾, 否则渲染端的下拉框会一直禁用
+    let finish = |connected: bool| {
+        app.emit(
+            "setting-nfc-config",
+            if connected { "success" } else { "failed" },
+        )
+        .ok();
+        app.emit(
+            "update-device-status",
+            json!({
+                "state": if connected { "connected" } else { "failed" },
+                "device": device
+            }),
+        )
+        .ok();
+    };
     let outcome = run_task(
         app,
         state,
@@ -1569,25 +1641,14 @@ fn set_nfc_config(
         &mut |_code| {},
     );
     let Ok(outcome) = outcome else {
+        finish(false);
         return;
     };
     let connected = match found {
         Some(value) => value,
         None => state.lock().unwrap().device_connected,
     };
-    app.emit(
-        "setting-nfc-config",
-        if connected { "success" } else { "failed" },
-    )
-    .ok();
-    app.emit(
-        "update-device-status",
-        json!({
-            "state": if connected { "connected" } else { "failed" },
-            "device": device
-        }),
-    )
-    .ok();
+    finish(connected);
     if outcome == TaskOutcome::Success {
         exit_success(app, state);
     }
@@ -1653,7 +1714,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "hard-nested-config-done" => hard_nested_config_done(&app, &state, &tasks, &arg),
         "run-hard-nested" => {
             if let Some(cfg) = hard_config_from(&arg) {
-                run_hard_nested_once(&app, &state, &tasks, &cfg, true);
+                let _ = run_hard_nested_once(&app, &state, &tasks, &cfg, true);
             }
         }
         "open-dict-file" => open_dict_file(&app, &state),
@@ -1743,6 +1804,11 @@ pub fn get_builder() -> String {
 
 #[tauri::command]
 pub fn open_link(url: String) -> Result<(), String> {
+    // explorer.exe <path> 会直接执行该程序, 所以这里必须限定协议,
+    // 否则等于给页面脚本一个"执行任意本地文件"的原语
+    if !url.starts_with("https://") {
+        return Err("unsupported url scheme".into());
+    }
     hidden_command("explorer.exe")
         .arg(&url)
         .spawn()

@@ -24,6 +24,19 @@ function exec(msg, cmd, args, processHandler, finishHandler) {
         status.isRunningTask = true
         printLog(`\n\n### ${msg}\n`)
         task = cp.spawn(`${binPath}${cmd}`, args)
+        let spawnFailed = false
+
+        // spawn 对"可执行文件不存在"是异步 emit error 而不是同步抛错,
+        // 不接住就是 uncaughtException, 直接干掉主进程 (framework/bin 缺失时必中)。
+        // 注意 error 之后 close 仍会以 code=-2 触发, 用标记避免重复报错。
+        task.on('error', (err) => {
+            spawnFailed = true
+            status.isRunningTask = false
+            printLog(`\n${err.message}\n`)
+            sendToMainWindow("update-events", {type: "error", text: `${i18n("event_task_failed")}`})
+            printExitLog(1)
+            reject(err)
+        })
 
         task.stdout.on('data', (data) => {
             printLog(data.toString());
@@ -36,6 +49,10 @@ function exec(msg, cmd, args, processHandler, finishHandler) {
         });
 
         task.on('close', (code, signal) => {
+            if (spawnFailed) {
+                status.isRunningTask = false
+                return
+            }
             if (finishHandler) finishHandler(code, signal)
 
             status.isRunningTask = false

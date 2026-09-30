@@ -1,12 +1,22 @@
 const {execAction} = require('./command')
 const {app, BrowserWindow, ipcMain, Menu, nativeTheme, shell} = require('electron')
-const {createMainWindow} = require('./windows')
-const {killProcess} = require('./execUtils')
+const {createMainWindow, sendToMainWindow} = require('./windows')
+const {killProcess, printExitLog, printLog} = require('./execUtils')
+const status = require('./status')
 const path = require("path");
 const buildInfo = require('./buildInfo.json');
 const i18n = require('./i18n');
 
 process.env['LIBNFC_SYSCONFDIR'] = app.getPath('userData')
+
+// 异步回调里的异常没人接, 会直接终止主进程, 连带丢掉用户正在编辑的 dump 和正在跑的日志。
+// 这里兜底: 记进日志面板并解除"任务进行中", 否则此后每个操作都会弹"设备忙"。
+process.on('uncaughtException', (err) => {
+    console.error(err)
+    status.isRunningTask = false
+    printLog(`\n${i18n.getText("log_msg_internal_error")}\n${err && err.message ? err.message : String(err)}\n`)
+    printExitLog(1)
+})
 
 Menu.setApplicationMenu(null)
 
@@ -26,6 +36,8 @@ ipcMain.handle('exec-action', (event, action, arg) => {
     execAction(action, arg)
 })
 ipcMain.handle('open-link', (event, url) => {
+    // 只放行 https, 其余协议一律拒绝 (file:// 等可被用来打开本地可执行文件)
+    if (typeof url !== 'string' || !url.startsWith('https://')) return
     shell.openExternal(url)
 })
 ipcMain.handle('dark-mode:system', () => {

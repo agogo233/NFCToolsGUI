@@ -492,6 +492,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
         .set_file_name(default_target.file_name().unwrap_or_default().to_string_lossy().into_owned())
         .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
         .save_file();
+    let user_chosen = chosen.is_some();
     let target = chosen.unwrap_or(default_target);
     match std::fs::rename(&temp, &target) {
         Err(_) => {
@@ -499,7 +500,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
             log_exit(app, state, 1);
         }
         Ok(_) => {
-            if chosen.is_some() {
+            if user_chosen {
                 print_log(
                     app,
                     &format!(

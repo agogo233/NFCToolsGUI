@@ -72,8 +72,8 @@ impl TaskManager {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "stderr unavailable"))?;
         let (tx, rx) = mpsc::channel::<String>();
         let log_tx = tx.clone();
-        thread::spawn(move || pump_lines(stdout, app.clone(), log_tx));
-        thread::spawn(move || pump_lines(stderr, app.clone(), tx));
+        thread::spawn(move || Self::pump_lines(stdout, app.clone(), log_tx));
+        thread::spawn(move || Self::pump_lines(stderr, app.clone(), tx));
         self.child = Some(Arc::new(Mutex::new(Some(child))));
         Ok(rx)
     }

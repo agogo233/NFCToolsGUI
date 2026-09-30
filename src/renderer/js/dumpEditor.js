@@ -53,7 +53,7 @@ $('#update-tag-color').click(() => {
             item.innerHTML = updateTagColor(item.innerText, !i)
         })
     } else {
-        alert(i18n("html_data_format_wrong"))
+        alert(hasNonClassicLayout() ? i18n("html_data_not_classic_layout") : i18n("html_data_format_wrong"))
     }
 })
 
@@ -87,12 +87,20 @@ window['electronAPI'].onSavedDumpFile((event, data) => {
 
 function updateTagColor(data, isBlock0 = false) {
     const splitData = data.split("\n")
+    // 少于 4 行的分组不是 Mifare Classic 扇区布局 (如 Ultralight), 没有第 4 行可着色
+    if (splitData.length < 4) return data
     if (isBlock0) {splitData[0] = `<span class="uid">${splitData[0]}</span>`}
     splitData[3] = `<span class="keyA">${splitData[3].substring(0, 12)}</span>` +
         `<span class="accessControl">${splitData[3].substring(12, 18)}</span>` +
         `${splitData[3].substring(18, 20)}` +
         `<span class="keyB">${splitData[3].substring(20)}</span>`
     return splitData.join("\n")
+}
+
+// 分组不足 4 行 = 不是 Mifare Classic 扇区布局, 与"内容不是合法 hex"是两回事, 提示要区分开
+function hasNonClassicLayout() {
+    return $('#binary-data-content').find('.binary-input').toArray()
+        .some((item) => item.innerText.split("\n").length < 4)
 }
 
 function checkData(isCheckContent = false) {

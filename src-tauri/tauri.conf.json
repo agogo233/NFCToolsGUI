@@ -1,0 +1,21 @@
+{
+    "identifier": "com.agogo233.nfctoolsgui",
+    "productName": "NFCToolsGUI",
+    "version": "../package.json",
+    "build": {
+        "frontendDist": "../src/renderer"
+    },
+    "app": {
+        "withGlobalTauri": true,
+        "security": {
+            "csp": null
+        },
+        "windows": []
+    },
+    "bundle": {
+        "active": false,
+        "icon": [
+            "../src/icons/icon.ico"
+        ]
+    }
+}

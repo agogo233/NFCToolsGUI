@@ -99,3 +99,7 @@ source/libusb-win32/*.a
 source/libusb-win32/*.dll
 source/libusb-win32/*.exp
 
+
+# Tauri (Rust)
+src-tauri/target/
+src-tauri/gen/

@@ -1,0 +1,20 @@
+[package]
+name = "nfctoolsgui"
+version = "1.0.0"
+description = "NFCToolsGUI is a Tauri-based tool that interacts with PN532 on Windows"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = "2"
+serde_json = "1"
+
+[dependencies]
+tauri = "2"
+rfd = "0.17"
+serialport = "4"
+sys-locale = "0.3"
+serde_json = "1"
+regex = "1"
+chrono = "0.4"
+
+

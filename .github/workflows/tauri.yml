@@ -1,0 +1,78 @@
+name: tauri-build
+
+on:
+  push:
+    branches: [ "tauri" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Tauri (Windows)
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Setup MSYS2 (Windows)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+
+      - uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
+
+      - name: Compile core files (Windows)
+        shell: msys2 {0}
+        run: sh ./compile.sh
+
+      - name: Setup Rust toolchain
+        run: |
+          rustup default stable
+          rustup show
+          cargo --version
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build Tauri app
+        working-directory: src-tauri
+        env:
+          NFCTOOLSGUI_COMPILER: "Github Actions"
+        run: cargo build --release
+
+      - name: Collect output files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force upload/NFCToolsGUI | Out-Null
+          Copy-Item src-tauri/target/release/nfctoolsgui.exe upload/NFCToolsGUI/
+          Copy-Item -Recurse framework upload/NFCToolsGUI/framework
+          Copy-Item dict.dic upload/NFCToolsGUI/
+          Compress-Archive -Force -Path upload/NFCToolsGUI/* -DestinationPath upload/NFCToolsGUI-tauri-win64.zip
+          Remove-Item -Recurse upload/NFCToolsGUI
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFCToolsGUI-tauri-win64
+          path: upload/*.zip
+
+      - name: Force-update "latest" tag
+        shell: bash
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Replace release assets
+        shell: bash
+        run: |
+          gh release delete latest -y >/dev/null 2>&1 || true
+          gh release create latest upload/*.zip \
+            --title "Tauri CI build $(git rev-parse --short HEAD)" \
+            --notes "Auto-built by cloud CI (Tauri) on $(date +%Y-%m-%d)" \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

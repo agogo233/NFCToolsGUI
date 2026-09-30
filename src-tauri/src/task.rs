@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -59,33 +59,39 @@ impl TaskManager {
         command.args(args);
         command.env("LIBNFC_SYSCONFDIR", data_dir);
         command.current_dir(bin_dir);
-        let stdout_pipe = Stdio::piped();
-        command.stdout(stdout_pipe.try_clone()?);
-        command.stderr(stdout_pipe);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
         let mut child = command.spawn()?;
         let stdout = child
             .stdout
             .take()
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "stdout unavailable"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "stderr unavailable"))?;
         let (tx, rx) = mpsc::channel::<String>();
-        let handle = app.clone();
-        thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let Ok(text) = line else {
-                    break;
-                };
-                let text = text.trim_end_matches('\r');
-                if handle.emit("update-log-output", format!("{text}\n")).is_err() {
-                    break;
-                }
-                if tx.send(text.to_string()).is_err() {
-                    break;
-                }
-            }
-        });
+        let log_tx = tx.clone();
+        thread::spawn(move || pump_lines(stdout, app.clone(), log_tx));
+        thread::spawn(move || pump_lines(stderr, app.clone(), tx));
         self.child = Some(Arc::new(Mutex::new(Some(child))));
         Ok(rx)
+    }
+
+    fn pump_lines(stream: impl std::io::Read + Send, handle: tauri::AppHandle, tx: mpsc::Sender<String>) {
+        let reader = BufReader::new(stream);
+        for line in reader.lines() {
+            let Ok(text) = line else {
+                break;
+            };
+            let text = text.trim_end_matches('\r');
+            if handle.emit("update-log-output", format!("{text}\n")).is_err() {
+                break;
+            }
+            if tx.send(text.to_string()).is_err() {
+                break;
+            }
+        }
     }
 
     pub fn kill(&self) {

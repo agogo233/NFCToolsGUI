@@ -489,7 +489,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
     let chosen = rfd::FileDialog::new()
         .set_title(t(state, "dialog_title_save_to"))
         .set_directory(&p.dump_files)
-        .set_file_name(&default_target.file_name().unwrap_or_default().to_string_lossy())
+        .set_file_name(default_target.file_name().unwrap_or_default().to_string_lossy().into_owned())
         .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
         .save_file();
     let target = chosen.unwrap_or(default_target);
@@ -537,15 +537,12 @@ fn read_dump_phase(
     let p = paths(app);
     check_key_file(&p.keys);
     state.lock().unwrap().reset_key_info();
-    print_status(
-        app,
-        state,
-        if save_dump_file {
-            &t(state, "indicator_backing_up_current_card")
-        } else {
-            &t(state, "indicator_detecting_ic_card")
-        },
-    );
+    let status_text = if save_dump_file {
+        t(state, "indicator_backing_up_current_card")
+    } else {
+        t(state, "indicator_detecting_ic_card")
+    };
+    print_status(app, state, &status_text);
     let args = if save_dump_file {
         vec![
             format!("-O{}", p.temp_mfd.display()),
@@ -1138,7 +1135,7 @@ fn auto_hard_nested(
             _ => {}
         }
         let cfg = {
-            let s = state.lock().unwrap();
+            let mut s = state.lock().unwrap();
             if from_user {
                 s.total_unknown_keys = s.unknown_key_info.len() as i64;
             }
@@ -1598,7 +1595,7 @@ fn set_nfc_config(
 fn scan_usb_devices(app: &AppHandle) {
     let devices: Vec<String> = serialport::available_ports()
         .into_iter()
-        .filter_map(|result| result.ok())
+        .flatten()
         .map(|port| port.port_name)
         .collect();
     app.emit("update-usb-devices", &devices).ok();
@@ -1748,5 +1745,6 @@ pub fn open_link(url: String) -> Result<(), String> {
     std::process::Command::new("explorer.exe")
         .arg(&url)
         .spawn()
+        .map(|_child| {})
         .map_err(|err| err.to_string())
 }

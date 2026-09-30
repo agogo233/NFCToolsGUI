@@ -37,7 +37,11 @@ fn create(
     payload: Option<(String, serde_json::Value)>,
 ) -> Result<(), String> {
     if let Some(existing) = app.get_webview_window(label) {
-        existing.destroy().map_err(|err| err.to_string())?;
+        existing.set_focus().ok();
+        if let Some((channel, value)) = &payload {
+            app.emit_to(label, channel, value).ok();
+        }
+        return Ok(());
     }
     let mut builder = WebviewWindowBuilder::new(
         app,

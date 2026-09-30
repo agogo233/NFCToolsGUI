@@ -8,6 +8,18 @@ use std::thread;
 
 use tauri::Emitter;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+pub fn hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
 pub struct TaskManager {
     running: bool,
     child: Option<Arc<Mutex<Option<Child>>>>,
@@ -55,7 +67,7 @@ impl TaskManager {
     ) -> std::io::Result<mpsc::Receiver<String>> {
         self.killed.store(false, Ordering::SeqCst);
         let program = bin_dir.join(format!("{}.exe", cmd));
-        let mut command = Command::new(&program);
+        let mut command = hidden_command(&program);
         command.args(args);
         command.env("LIBNFC_SYSCONFDIR", data_dir);
         command.current_dir(bin_dir);

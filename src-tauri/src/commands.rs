@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::i18n::t;
 use crate::state::AppState;
-use crate::task::TaskManager;
+use crate::task::{hidden_command, TaskManager};
 use crate::windows;
 
 pub const DEFAULT_KEYS: [&str; 13] = [
@@ -1258,7 +1258,7 @@ fn dict_test_config_done(
 fn open_history_keys(app: &AppHandle) {
     let p = paths(app);
     check_key_file(&p.keys);
-    let _ = std::process::Command::new("notepad.exe").arg(&p.keys).spawn();
+    let _ = hidden_command("notepad.exe").arg(&p.keys).spawn();
 }
 
 fn open_dump_editor(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
@@ -1399,7 +1399,7 @@ fn hex_to_bytes(text: &str) -> Vec<u8> {
 fn open_dump_folder(app: &AppHandle) {
     let p = paths(app);
     std::fs::create_dir_all(&p.dump_files).ok();
-    let _ = std::process::Command::new("explorer.exe").arg(&p.dump_files).spawn();
+    let _ = hidden_command("explorer.exe").arg(&p.dump_files).spawn();
 }
 
 fn list_dump_files(app: &AppHandle) -> Vec<String> {
@@ -1743,7 +1743,7 @@ pub fn get_builder() -> String {
 
 #[tauri::command]
 pub fn open_link(url: String) -> Result<(), String> {
-    std::process::Command::new("explorer.exe")
+    hidden_command("explorer.exe")
         .arg(&url)
         .spawn()
         .map(|_child| {})

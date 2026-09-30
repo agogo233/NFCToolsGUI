@@ -10,9 +10,9 @@
 </head>
 <body>
 
-<button id="dark-mode" onclick="window.darkMode.dark()">Toggle Dark Mode</button>
-<button id="light-mode" onclick="window.darkMode.light()">Toggle Light Mode</button>
-<button id="follow-system-mode" onclick="window.darkMode.system()">Follow system</button>
+<button id="dark-mode" onclick="window.darkMode.dark()">{{ html_theme_dark }}</button>
+<button id="light-mode" onclick="window.darkMode.light()">{{ html_theme_light }}</button>
+<button id="follow-system-mode" onclick="window.darkMode.system()">{{ html_theme_system }}</button>
 
 <div class="final-button">
     <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>

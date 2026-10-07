@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/subWindow.css">
+    <link rel="stylesheet" href="../css/scrollBar.css">
+</head>
+<body>
+    <div class="title">{{ html_uid_input_title }}</div>
+    <input type="text" id="uid" placeholder="{{ html_uid_input_placeholder }}" style="width: 320px">
+    <br>
+    <div class="final-button">
+        <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
+        <button onclick="window.electronAPI.execAction('done-input-uid-write', document.getElementById('uid').value);window.electronAPI.closeCurrentWindow()">{{ dialog_button_ok }}</button>
+    </div>
+</body>
+<script src="../js/i18n.js"></script>
+</html>

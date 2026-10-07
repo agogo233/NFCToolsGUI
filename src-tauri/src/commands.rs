@@ -884,6 +884,89 @@ fn write_ufuid_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskM
     }
 }
 
+// 剥离常见分隔符后整体校验, 只接受 4 字节 UID (8 hex) 或完整 0 块 (32 hex)
+fn clean_uid_input(text: &str) -> Option<String> {
+    let trimmed: String = text
+        .chars()
+        .filter(|&c| !matches!(c, ' ' | '\t' | '\r' | '\n' | ':' | '-' | '_' | '.'))
+        .collect();
+    if trimmed.is_empty()
+        || !trimmed.chars().all(|c| c.is_ascii_hexdigit())
+        || !(trimmed.len() == 8 || trimmed.len() == 32)
+    {
+        return None;
+    }
+    Some(trimmed.to_uppercase())
+}
+
+fn hex_byte(hex: &str, index: usize) -> u8 {
+    u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16).unwrap_or(0)
+}
+
+fn uid_to_block0(uid: &str) -> String {
+    let bcc = hex_byte(uid, 0) ^ hex_byte(uid, 1) ^ hex_byte(uid, 2) ^ hex_byte(uid, 3);
+    // 0 块布局: UID(4) + BCC(1) + SAK(1) + ATQA(2) + 8 字节补零
+    let mut block0 = format!("{uid}{bcc:02X}080400");
+    block0.push_str("0000000000000000");
+    block0
+}
+
+fn block0_bcc_ok(block0: &str) -> bool {
+    let bcc = hex_byte(block0, 0) ^ hex_byte(block0, 1) ^ hex_byte(block0, 2) ^ hex_byte(block0, 3);
+    hex_byte(block0, 4) == bcc
+}
+
+fn done_input_uid_write(
+    app: &AppHandle,
+    state: &Mutex<AppState>,
+    tasks: &Mutex<TaskManager>,
+    arg: &Value,
+) {
+    let text = arg.as_str().unwrap_or_default();
+    let Some(cleaned) = clean_uid_input(text) else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_invalid_uid_input");
+        return;
+    };
+    let block0 = if cleaned.len() == 8 { uid_to_block0(&cleaned) } else { cleaned };
+    let force_bcc = !block0_bcc_ok(&block0);
+    let mut message = format!("{}{}", t(state, "dialog_msg_confirm_write_uid"), block0);
+    if force_bcc {
+        message.push_str(&t(state, "log_msg_bcc_force"));
+    }
+    let confirmed = rfd::MessageDialog::new()
+        .set_title(t(state, "dialog_title_danger_operation"))
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .set_level(rfd::MessageLevel::Warning)
+        .show()
+        == rfd::MessageDialogResult::Yes;
+    if !confirmed {
+        return;
+    }
+    if force_bcc {
+        print_log(app, &format!("\n{}\n", t(state, "log_msg_bcc_force")));
+    }
+    print_status(app, state, &t(state, "indicator_writing_ufuid_uid"));
+    let mut args = vec!["-q".to_string(), block0];
+    if force_bcc {
+        args.push("-f".to_string());
+    }
+    let setuid_msg = t(state, "log_msg_start_write_ufuid_uid");
+    if run_task(
+        app,
+        state,
+        tasks,
+        "nfc-mfsetuid",
+        &args,
+        &setuid_msg,
+        &mut |_| {},
+        &mut |_| {},
+    ) == Ok(TaskOutcome::Success)
+    {
+        exit_success(app, state);
+    }
+}
+
 fn lock_ufuid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
     if !confirm(
         app,
@@ -1796,6 +1879,10 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "done-input-keys-read-IC" => done_input_keys_read_ic(&app, &state, &tasks, &arg),
         "detect-card-type" => detect_card_type(&app, &state, &tasks),
         "write-ufuid-uid" => write_ufuid_uid(&app, &state, &tasks),
+        "input-uid-write" => {
+            windows::create_uid_input_window(&app, &state).ok();
+        }
+        "done-input-uid-write" => done_input_uid_write(&app, &state, &tasks, &arg),
         "lock-ufuid" => lock_ufuid(&app, &state, &tasks),
         "hard-nested" => hard_nested(&app, &state),
         "hard-nested-config-done" => hard_nested_config_done(&app, &state, &tasks, &arg),

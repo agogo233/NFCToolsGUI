@@ -297,7 +297,7 @@ select {
 .button-column {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .column-title {

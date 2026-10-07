@@ -136,6 +136,24 @@ pub fn create_input_keys_window(app: &AppHandle, state: &Mutex<AppState>) -> Res
     )
 }
 
+pub fn create_uid_input_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<(), String> {
+    create(
+        app,
+        state,
+        "uidInput",
+        "uidInput",
+        400,
+        200,
+        main_window(app),
+        false,
+        false,
+        false,
+        false,
+        false,
+        None,
+    )
+}
+
 pub fn create_hard_nested_window(
     app: &AppHandle,
     state: &Mutex<AppState>,

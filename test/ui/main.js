@@ -127,6 +127,16 @@ const PAGES = [
         ],
     },
     {
+        name: "uidInput", file: "uidInput.html", sizes: [[400, 200, "std"], [400, 160, "win32"]],
+        framePessimistic: "win32-only",
+        rects: ["input[type='text']"],
+        css: [{sel: "input[type='text']", props: ["margin-top", "width"]}],
+        cssSoft: [
+            ["input[type='text']", "margin-top", "20px"],
+            ["input[type='text']", "width", "320px"],
+        ],
+    },
+    {
         name: "hardNested", file: "hardNested.html", sizes: [[500, 610, "std"], [500, 570, "win32"]],
         inject: injectHardNested,
         framePessimistic: "win32-only",

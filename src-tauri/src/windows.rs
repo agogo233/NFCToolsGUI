@@ -114,7 +114,7 @@ pub fn create_settings_window(app: &AppHandle, state: &Mutex<AppState>) -> Resul
         false,
         false,
         false,
-        Some(("settings-speed", json!({ "speed": speed }))),
+        Some(("settings-speed".to_string(), json!({ "speed": speed }))),
     )
 }
 

@@ -37,8 +37,9 @@ fn key_sector_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"Sector\s+(\d+)\s*-\s*(?:Found|Unknown)\s+Key\s+[AB]").unwrap())
 }
 
-// 距离攻击恢复阶段: 扇区上下文。探测进度行末尾没有换行符, 扇区与密钥在同一条物理行上,
-// 见 source/mfoc/src/mfoc.c:555, 因此正则不能加行尾锚定。
+// 距离攻击恢复阶段: 扇区上下文。探测进度行 "Sector: N, type A, probe .., distance .."
+// 末尾没有换行符 (source/mfoc/src/mfoc.c:555), 点进度 (:568) 与换行 (:571) 之后才
+// 输出密钥 (:602) —— 扇区与密钥分处两条物理行, 必须跨行保持上下文, 正则不能加行尾锚定。
 fn recover_sector_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"Sector:\s*(\d+),\s*type\s*[AB]").unwrap())

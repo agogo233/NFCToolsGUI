@@ -1,6 +1,7 @@
 // 密钥输出解析的回归测试: node test/parse/keyParser.test.js
 // 重点验证"分块不变性" —— stdout 一次喂进来的字节数与扇区边界无关。
 const {createKeyInfoParser, createLineSplitter} = require("../../src/keyParser")
+const {eraseLastLine, appendLogChunk} = require("../../src/renderer/js/logUtil")
 
 let failed = 0
 function check(name, cond, extra) {
@@ -313,6 +314,27 @@ console.log("[parse] 10. 两个阶段的正则互不误匹配")
     const p7 = createKeyInfoParser()
     p7.push("Sector: 12, type A, probe 1 ......\n")
     eq("扇区号大于 9 (工具用 %d 不补零)", p7.push("  Found Key: A [112233445566]\n").map((r) => r.sector), [12])
+}
+
+console.log("[parse] 11. 日志进度行 \\33[2K 覆盖处理 (logUtil)")
+{
+    const ESC = "\x1b"
+    eq("普通文本原样追加", appendLogChunk("aaa\n", "bbb\n"), "aaa\nbbb\n")
+    eq("单次覆盖: 擦掉进行中的行再写入", appendLogChunk("aaa\n", `\r${ESC}[2KProgress X`), "aaa\nProgress X")
+    eq("日志以换行结尾: 当前行是空行, 新内容起新行", appendLogChunk("aaa\n", `${ESC}[2KB`), "aaa\nB")
+    eq("单行日志被整体擦掉", appendLogChunk("aaa", `\r${ESC}[2KB`), "B")
+    eq("空日志覆盖", appendLogChunk("", `\r${ESC}[2KB`), "B")
+    // Tauri 端按行缓冲: 无换行进度攒成一行, 一行里连带多个覆盖标记, 只应留下最后一条
+    const accumulated = `\r${ESC}[2KProgress 0/100\r${ESC}[2KProgress 1/100\r${ESC}[2KProgress 1000/100\n\n`
+    const r = appendLogChunk("aaa\n", accumulated)
+    eq("Tauri 积压行: 只留最后一条进度", r, "aaa\nProgress 1000/100\n\n")
+    eq("Tauri 积压行: 无转义序列残留", !r.includes(ESC), true)
+    eq("带换行的进度行各自保留", appendLogChunk("aaa\n", `\r${ESC}[2KA\n\r${ESC}[2KB\n`), "aaa\nA\nB\n")
+    eq("标记前的普通行不误擦", appendLogChunk("aaa\n", `X\n\r${ESC}[2KY`), "aaa\nX\nY")
+    eq("标记前缺 \\r 也识别", appendLogChunk("aaa", `${ESC}[2KB`), "B")
+    eq("eraseLastLine: 删末尾未换行的一行(含内容)", eraseLastLine("aaa\nbbb"), "aaa\n")
+    eq("eraseLastLine: 以换行结尾无变化", eraseLastLine("aaa\nbbb\n"), "aaa\nbbb\n")
+    eq("eraseLastLine: 唯一一行清空", eraseLastLine("bbb"), "")
 }
 
 console.log(failed === 0 ? "[parse] PASSED" : `[parse] FAILED (${failed})`)

@@ -21,21 +21,17 @@ mainProcess.getVersion().then((v) =>{$("#version-value").html(v)})
 // 显示区只保留最近 LOG_DISPLAY_LIMIT 个字符: 长时间任务(字典攻击数小时)会把
 // textarea.value 撑到很大, 每次追加都要重排, 越跑越卡。完整内容另存在
 // fullLog 里, "保存日志" 取的是完整内容, 因此截断只影响显示。
+// 进度行的 \r\33[2K 覆盖由 appendLogChunk 处理 (logUtil.js): 逐个标记擦除当前行
+// 再写入。Tauri 端按行缓冲会把无换行的多次覆盖攒成一行发出, 只处理第一个标记会
+// 把整串转义序列残留进日志。fullLog 与显示走同一逻辑, 所以保存的日志里进度行
+// 与终端一致 (只有最后一行), 不含转义序列。
 const LOG_DISPLAY_LIMIT = 500000
 let fullLog = ""
 
 mainProcess.onUpdateLogOutput((_event, value) => {
     const textarea = document.getElementById("log")
-    if (value.indexOf("\33[2K") >= 0) {
-        // 回退整行以原地覆盖进度条。没有换行时 lastIndexOf 返回 -1, substring(0, -1)
-        // 会把整个日志清空, 必须挡掉。
-        const lastBreak = textarea.value.lastIndexOf('\n')
-        if (lastBreak >= 0) textarea.value = textarea.value.substring(0, lastBreak)
-        value = value.replace("\33[2K", "")
-    }
-
-    fullLog += value
-    textarea.value += value
+    fullLog = appendLogChunk(fullLog, value)
+    textarea.value = appendLogChunk(textarea.value, value)
     if (textarea.value.length > LOG_DISPLAY_LIMIT) {
         textarea.value = textarea.value.substring(textarea.value.length - LOG_DISPLAY_LIMIT)
     }

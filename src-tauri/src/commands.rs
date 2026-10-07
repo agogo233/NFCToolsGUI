@@ -967,6 +967,194 @@ fn done_input_uid_write(
     }
 }
 
+fn read_block0_file(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 16 {
+        return None;
+    }
+    Some(
+        bytes
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02X}"))
+            .collect::<String>(),
+    )
+}
+
+fn decode_block0(block0: &str) -> Option<[u8; 16]> {
+    if block0.len() != 32 {
+        return None;
+    }
+    let mut data = [0u8; 16];
+    for (i, byte) in data.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&block0[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(data)
+}
+
+fn phw_read_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
+    let read_msg = t(state, "log_msg_phw_read_uid");
+    if let Ok(TaskOutcome::Success) = read_dump_phase(app, state, tasks, true, &read_msg) {
+        let p = paths(app);
+        let block0 = match read_block0_file(&p.temp_mfd) {
+            Some(block0) => block0,
+            None => {
+                print_log(app, &format!("\n{}\n", t(state, "log_msg_card_read_failed")));
+                log_exit(app, state, 1);
+                return;
+            }
+        };
+        state.lock().unwrap().phw_block0 = Some(block0.clone());
+        app.emit_to(
+            "phoneWristband",
+            "update-phw-block0",
+            &json!({ "block0": block0 }),
+        )
+        .ok();
+        exit_success(app, state);
+    }
+}
+
+fn phw_write_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
+    let block0 = state.lock().unwrap().phw_block0.clone();
+    let Some(block0) = block0 else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_need_phw_read_uid_first");
+        return;
+    };
+    let force_bcc = !block0_bcc_ok(&block0);
+    let message = format!("{}{}", t(state, "dialog_msg_confirm_phw_write_uid"), block0);
+    let confirmed = rfd::MessageDialog::new()
+        .set_title(t(state, "dialog_title_danger_operation"))
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .set_level(rfd::MessageLevel::Warning)
+        .show()
+        == rfd::MessageDialogResult::Yes;
+    if !confirmed {
+        return;
+    }
+    print_status(app, state, &t(state, "indicator_writing_ufuid_uid"));
+    let mut args = vec!["-q".to_string(), block0];
+    if force_bcc {
+        args.push("-f".to_string());
+    }
+    let setuid_msg = t(state, "log_msg_start_write_ufuid_uid");
+    if run_task(
+        app,
+        state,
+        tasks,
+        "nfc-mfsetuid",
+        &args,
+        &setuid_msg,
+        &mut |_| {},
+        &mut |_| {},
+    ) == Ok(TaskOutcome::Success)
+    {
+        exit_success(app, state);
+    }
+}
+
+fn phw_write_data(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, arg: &Value) {
+    let block0 = state.lock().unwrap().phw_block0.clone();
+    let Some(block0) = block0 else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_need_phw_read_uid_first");
+        return;
+    };
+    let data = match decode_block0(&block0) {
+        Some(data) => data,
+        None => {
+            show_error(app, state, "dialog_title_error", "dialog_msg_invalid_uid_input");
+            return;
+        }
+    };
+    let sector = arg.get("sector").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let block = arg.get("block").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+    if !(0..=15).contains(&sector) || !(0..=3).contains(&block) {
+        show_error(
+            app,
+            state,
+            "dialog_title_error",
+            "dialog_msg_phw_sector_block_invalid",
+        );
+        return;
+    }
+    let sector = sector as u32;
+    let block = block as u32;
+    let message = format!(
+        "{}{}{}{}/{}",
+        t(state, "dialog_msg_confirm_phw_write_data"),
+        block0,
+        t(state, "dialog_msg_phw_write_to"),
+        sector,
+        block
+    );
+    let confirmed = rfd::MessageDialog::new()
+        .set_title(t(state, "dialog_title_danger_operation"))
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .set_level(rfd::MessageLevel::Warning)
+        .show()
+        == rfd::MessageDialogResult::Yes;
+    if !confirmed {
+        return;
+    }
+    let p = paths(app);
+    let read_msg = t(state, "log_msg_phw_read_back");
+    if let Ok(TaskOutcome::Success) = read_dump_phase(app, state, tasks, true, &read_msg) {
+        let temp = p.temp_mfd.clone();
+        let offset = ((sector * 4 + block) as usize) * 16;
+        let mut bytes = match std::fs::read(&temp) {
+            Ok(bytes) if bytes.len() >= offset + 16 => bytes,
+            _ => {
+                print_log(
+                    app,
+                    &format!("\n{}\n", t(state, "log_msg_card_read_failed")),
+                );
+                exit_success(app, state);
+                return;
+            }
+        };
+        bytes[offset..offset + 16].copy_from_slice(&data);
+        if std::fs::write(&temp, &bytes).is_err() {
+            print_log(app, &format!("\n{}\n", t(state, "log_msg_card_read_failed")));
+            exit_success(app, state);
+            return;
+        }
+        print_status(app, state, &t(state, "indicator_writing_phw_data"));
+        let args = vec![
+            "w".to_string(),
+            "A".to_string(),
+            "u".to_string(),
+            temp.to_string_lossy().to_string(),
+            temp.to_string_lossy().to_string(),
+            "f".to_string(),
+        ];
+        let write_msg = t(state, "log_msg_phw_write_back");
+        let mut finish = |code: Option<i32>| {
+            let text = if code == Some(0) {
+                t(state, "log_msg_write_success")
+            } else {
+                t(state, "log_msg_write_failed")
+            };
+            print_log(app, &format!("\n\n{}\n", text));
+            std::fs::remove_file(&temp).ok();
+        };
+        if run_task(
+            app,
+            state,
+            tasks,
+            "nfc-mfclassic",
+            &args,
+            &write_msg,
+            &mut |_| {},
+            &mut finish,
+        ) == Ok(TaskOutcome::Success)
+        {
+            exit_success(app, state);
+        }
+    }
+}
+
 fn lock_ufuid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
     if !confirm(
         app,
@@ -1891,6 +2079,12 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
             windows::create_uid_input_window(&app, &state).ok();
         }
         "done-input-uid-write" => done_input_uid_write(&app, &state, &tasks, &arg),
+        "open-phw-window" => {
+            windows::create_phone_wristband_window(&app, &state).ok();
+        }
+        "phw-read-uid" => phw_read_uid(&app, &state, &tasks),
+        "phw-write-uid" => phw_write_uid(&app, &state, &tasks),
+        "phw-write-data" => phw_write_data(&app, &state, &tasks, &arg),
         "lock-ufuid" => lock_ufuid(&app, &state, &tasks),
         "hard-nested" => hard_nested(&app, &state),
         "hard-nested-config-done" => hard_nested_config_done(&app, &state, &tasks, &arg),

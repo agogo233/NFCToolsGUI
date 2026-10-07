@@ -77,6 +77,7 @@
         onOpenDictFile: (callback) => listen("dict-file-name", callback),
         onOpenDumpFile: (callback) => listen("binary-data", callback),
         onSavedDumpFile: (callback) => listen("saved-binary-data", callback),
+        onUpdatePhwBlock0: (callback) => listen("update-phw-block0", callback),
 
         getVersion: () => invoke("get_app_version"),
         getBuilder: () => invoke("get_builder"),

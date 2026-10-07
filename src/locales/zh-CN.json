@@ -169,5 +169,25 @@
   "guidance_unknown_post": " 个未知扇区密钥, 可尝试 HardNested 或字典测试",
   "guidance_dump_saved": "解卡完成, 转储已保存: ",
   "html_open_dump_folder": "打开转储目录",
-  "html_detect_card_first": "请先在主界面执行\"检测卡片加密\""
+  "html_detect_card_first": "请先在主界面执行\"检测卡片加密\"",
+
+  "html_phw_open": "手机/手环",
+  "html_phw_title": "手机/手环操作区",
+  "html_phw_guidance": "① 解卡 → ② 读卡号 → ③ 写 UID 位 → ④ App 模拟 A 卡 → ⑤ 写数据扇区",
+  "html_phw_card_no": "卡号",
+  "html_phw_read_uid": "读取卡号",
+  "html_phw_write_uid": "写 UID 位",
+  "html_phw_write_data": "写数据扇区",
+  "html_phw_sector": "扇区",
+  "html_phw_block": "块",
+  "html_phw_range": "扇区 0-15, 块 0-3",
+  "dialog_msg_need_phw_read_uid_first": "尚未读取卡号, 请先点\"读取卡号\"",
+  "dialog_msg_confirm_phw_write_uid": "将写入卡号 ",
+  "dialog_msg_confirm_phw_write_data": "将把卡号 ",
+  "dialog_msg_phw_write_to": " 写入扇区 ",
+  "dialog_msg_phw_sector_block_invalid": "扇区/块号超出范围(扇区 0-15, 块 0-3)",
+  "log_msg_phw_read_uid": "读取卡号(读回当前卡数据)...",
+  "log_msg_phw_read_back": "读回目标卡数据...",
+  "log_msg_phw_write_back": "写回数据扇区...",
+  "indicator_writing_phw_data": "正在写数据扇区..."
 }

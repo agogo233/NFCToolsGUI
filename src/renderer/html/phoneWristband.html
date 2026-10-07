@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/subWindow.css">
+    <link rel="stylesheet" href="../css/scrollBar.css">
+</head>
+<body>
+    <div class="title">{{ html_phw_title }}</div>
+    <div class="sub-title">{{ html_phw_guidance }}</div>
+
+    <hr class="hr-edge-weak">
+
+    <div class="sub-title">{{ html_phw_card_no }}</div>
+    <div id="phw-card-no" style="font-family: monospace; word-break: break-all">--</div>
+
+    <label for="phw-sector">{{ html_phw_sector }}</label>
+    <input type="text" id="phw-sector" value="0">
+    <br>
+    <label for="phw-block">{{ html_phw_block }}</label>
+    <input type="text" id="phw-block" value="1">
+    <div style="font-size: var(--fs-xs); color: var(--color-text-secondary)">{{ html_phw_range }}</div>
+
+    <div style="margin-top: var(--space-5)">
+        <button onclick="window.electronAPI.execAction('phw-read-uid')">{{ html_phw_read_uid }}</button>
+        <button onclick="window.electronAPI.execAction('phw-write-uid'); window.electronAPI.closeCurrentWindow()">{{ html_phw_write_uid }}</button>
+        <button onclick="phwWriteData()">{{ html_phw_write_data }}</button>
+    </div>
+
+    <div class="final-button">
+        <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
+    </div>
+</body>
+<script>
+    window.electronAPI.onUpdatePhwBlock0((_event, payload) => {
+        if (payload && payload.block0) {
+            document.getElementById("phw-card-no").textContent = payload.block0
+        }
+    })
+
+    function phwWriteData() {
+        const sector = parseInt(document.getElementById("phw-sector").value, 10)
+        const block = parseInt(document.getElementById("phw-block").value, 10)
+        window.electronAPI.execAction("phw-write-data", {
+            sector: isNaN(sector) ? 0 : sector,
+            block: isNaN(block) ? 1 : block
+        })
+        window.electronAPI.closeCurrentWindow()
+    }
+</script>
+<script src="../js/i18n.js"></script>
+</html>

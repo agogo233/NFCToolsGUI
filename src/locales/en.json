@@ -169,5 +169,25 @@
   "guidance_unknown_post": " unknown sector key(s), you can try HardNested or Dictionary Test",
   "guidance_dump_saved": "Card decryption finished, dump saved: ",
   "html_open_dump_folder": "Open Dump Folder",
-  "html_detect_card_first": "Please run Detect Card Encryption on the main window first"
+  "html_detect_card_first": "Please run Detect Card Encryption on the main window first",
+
+  "html_phw_open": "Phone / Wristband",
+  "html_phw_title": "Phone / Wristband",
+  "html_phw_guidance": "1. crack -> 2. read card no. -> 3. write UID slot -> 4. app emulates A card -> 5. write data sector",
+  "html_phw_card_no": "Card no.",
+  "html_phw_read_uid": "Read card no.",
+  "html_phw_write_uid": "Write UID slot",
+  "html_phw_write_data": "Write data sector",
+  "html_phw_sector": "Sector",
+  "html_phw_block": "Block",
+  "html_phw_range": "Sector 0-15, block 0-3",
+  "dialog_msg_need_phw_read_uid_first": "No card number read yet. Click \"Read card no.\" first",
+  "dialog_msg_confirm_phw_write_uid": "Will write card no. ",
+  "dialog_msg_confirm_phw_write_data": "Will write card no. ",
+  "dialog_msg_phw_write_to": " to sector ",
+  "dialog_msg_phw_sector_block_invalid": "Sector/block out of range (sector 0-15, block 0-3)",
+  "log_msg_phw_read_uid": "Reading card no. (reading back current card)...",
+  "log_msg_phw_read_back": "Reading back target card data...",
+  "log_msg_phw_write_back": "Writing back data sector...",
+  "indicator_writing_phw_data": "Writing data sector..."
 }

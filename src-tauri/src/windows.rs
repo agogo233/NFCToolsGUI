@@ -88,7 +88,7 @@ pub fn create_main_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<()
         "main",
         "index",
         800,
-        700,
+        740,
         None,
         false,
         false,
@@ -273,6 +273,27 @@ pub fn create_dump_history_window(
             "update-dump-history".to_string(),
             serde_json::Value::from(dumps),
         )),
+    )
+}
+
+pub fn create_phone_wristband_window(
+    app: &AppHandle,
+    state: &Mutex<AppState>,
+) -> Result<(), String> {
+    create(
+        app,
+        state,
+        "phoneWristband",
+        "phoneWristband",
+        400,
+        380,
+        main_window(app),
+        false,
+        false,
+        false,
+        false,
+        false,
+        None,
     )
 }
 

@@ -78,11 +78,14 @@ const injectDumpComparator = (wc) => {
 const injectDumpHistory = (wc) => {
     wc.send("update-dump-history", historyNames)
 }
+const injectPhoneWristband = (wc) => {
+    wc.send("update-phw-block0", {block0: "01020304040804000000000000000000"})
+}
 
 // 各页尺寸: 与 src/windows.js 一致, tag 区分 win32 小尺寸组与其他平台组
 const PAGES = [
     {
-        name: "index", file: "index.html", sizes: [[800, 700, "std"]],
+        name: "index", file: "index.html", sizes: [[800, 740, "std"]],
         inject: injectIndex,
         rects: ["#title-bar", "#device-status-bar", ".main-button-area", ".bottom-area", "#log", "#left-bar .bar-button"],
         soft: [
@@ -134,6 +137,18 @@ const PAGES = [
         cssSoft: [
             ["input[type='text']", "margin-top", "20px"],
             ["input[type='text']", "width", "320px"],
+        ],
+    },
+    {
+        name: "phoneWristband", file: "phoneWristband.html", sizes: [[400, 420, "std"], [400, 380, "win32"]],
+        inject: injectPhoneWristband,
+        framePessimistic: "win32-only",
+        rects: ["#phw-card-no", "input[type='text']", ".final-button button"],
+        css: [{sel: ".final-button button", props: ["height", "margin-right", "margin-top"]}],
+        cssSoft: [
+            [".final-button button", "height", "30px"],
+            [".final-button button", "margin-right", "15px"],
+            [".final-button button", "margin-top", "20px"],
         ],
     },
     {

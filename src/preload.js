@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onOpenDictFile: (callback) => ipcRenderer.on("dict-file-name", callback),
     onOpenDumpFile: (callback) => ipcRenderer.on("binary-data", callback),
     onSavedDumpFile: (callback) => ipcRenderer.on("saved-binary-data", callback),
+    onUpdatePhwBlock0: (callback) => ipcRenderer.on("update-phw-block0", callback),
 
     getVersion: () => ipcRenderer.invoke("get-app-version"),
     getBuilder: () => ipcRenderer.invoke('get-builder'),

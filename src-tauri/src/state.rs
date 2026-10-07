@@ -13,6 +13,7 @@ pub struct AppState {
     pub recover_sector: Option<i64>,
     pub dict_path: PathBuf,
     pub lang: String,
+    pub phw_block0: Option<String>,
 }
 
 impl AppState {

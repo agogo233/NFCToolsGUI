@@ -67,6 +67,9 @@ const createSettingsWindow = () => {
             preload: path.join(__dirname, 'preload.js'),
         },
     })
+    settingsWindow.once("ready-to-show", () => {
+        settingsWindow.center()
+    })
     settingsWindow.loadFile(path.join(__dirname, 'renderer/html/settings.html'))
 }
 
@@ -84,6 +87,9 @@ const createInputKeysWindow = () => {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
         },
+    })
+    inputKeysWindow.once("ready-to-show", () => {
+        inputKeysWindow.center()
     })
     inputKeysWindow.loadFile(path.join(__dirname, 'renderer/html/inputkeys.html'))
 }
@@ -104,6 +110,7 @@ const createHardNestedWindow = (config) => {
         },
     })
     hardNestedWindow.once("ready-to-show", () => {
+        hardNestedWindow.center()
         hardNestedWindow.webContents.send("update-hard-nested-config", config)
     })
     hardNestedWindow.loadFile(path.join(__dirname, 'renderer/html/hardNested.html'))
@@ -125,6 +132,7 @@ const createDictTestWindow = (config) => {
         },
     })
     dictTestWindow.once("ready-to-show", () => {
+        dictTestWindow.center()
         dictTestWindow.webContents.send("update-dict-test-config", config)
     })
     dictTestWindow.loadFile(path.join(__dirname, 'renderer/html/dictTest.html'))

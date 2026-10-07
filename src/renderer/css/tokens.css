@@ -63,6 +63,7 @@
     --color-console-bg: #151728;
     --color-console-fg: #54ad6c;
     --color-danger: #eb7171;
+    --color-danger-strong: #c0392b;
 
     --color-scrollbar: rgba(245, 245, 245, 0.3);
     --color-scrollbar-button: #e5e5e5;
@@ -113,6 +114,7 @@
         --color-console-bg: #151728;
         --color-console-fg: #54ad6c;
         --color-danger: #eb7171;
+        --color-danger-strong: #c0392b;
 
         --color-scrollbar: #333333;
         --color-scrollbar-button: #444444;

@@ -98,11 +98,11 @@
             <img class="button-img" src="../assets/icon/svg/stop.svg" alt="{{ html_stop_task }}">
             <span class="tool-tip-text">{{ html_stop_task }}</span>
         </button>
-        <button class="bar-button" onclick="mainProcess.execAction('save-log', $('#log').val())">
+        <button class="bar-button" onclick="mainProcess.execAction('save-log', fullLog)">
             <img class="button-img" src="../assets/icon/svg/save.svg" alt="{{ html_save_log }}">
             <span class="tool-tip-text">{{ html_save_log }}</span>
         </button>
-        <button class="bar-button" onclick="document.getElementById('log').value=''">
+        <button class="bar-button" onclick="document.getElementById('log').value='';fullLog=''">
             <img class="button-img" src="../assets/icon/svg/trash.svg" alt="{{ html_clear_log }}">
             <span class="tool-tip-text">{{ html_clear_log }}</span>
         </button>

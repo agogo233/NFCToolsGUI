@@ -98,14 +98,14 @@ console.log("[parse] 4. 边界与噪声输入")
     eq("空输入", parser.push(""), [])
     eq("只有换行", parser.push("\n"), [])
     eq("无 Sector 头的密钥行被忽略", parser.push("Found   Key A: ffffffffffff\n"), [])
-    eq("扇区号大于 9 (不依赖两位补零)", parser.push("Sector 12 - Unknown Key A\n"), [{key: null, sector: 12, type: "A"}])
+    eq("扇区号大于 9 (不依赖两位补零)", parser.push("Sector 12 - Unknown Key A\n"), [{key: null, sector: 12, type: "A", recovered: false}])
     eq("11 位 hex 不算完整密钥", parser.push("Sector 00 - Found   Key A: fffffffffff\n"), [])
     eq("非 Mifare Classic 的杂项输出不影响扇区", parser.push("Found Mifare Classic Mini tag\n"), [])
     const p2 = createKeyInfoParser()
     eq("分块喂入后仍能接上被切断的密钥行", p2.push("Sector 00 - Found   Key A: ffffff"), [])
     eq("续行补全后产出该密钥", p2.push("ffffff Found   Key B: a0a1a2a3a4a5\n"), [
-        {key: "ffffffffffff", sector: 0, type: "A"},
-        {key: "a0a1a2a3a4a5", sector: 0, type: "B"}
+        {key: "ffffffffffff", sector: 0, type: "A", recovered: false},
+        {key: "a0a1a2a3a4a5", sector: 0, type: "B", recovered: false}
     ])
 }
 
@@ -113,7 +113,7 @@ console.log("[parse] 5. 大写 hex 归一化为小写 (与 keys.txt 保持一致
 {
     const parser = createKeyInfoParser()
     const r = parser.push("Sector 00 - Found   Key A: FFFFFFFFFFFF\n")
-    eq("大写输入归一化", r, [{key: "ffffffffffff", sector: 0, type: "A"}])
+    eq("大写输入归一化", r, [{key: "ffffffffffff", sector: 0, type: "A", recovered: false}])
 }
 
 // 旧实现的对照: 用匹配序号 i/2 反推扇区号, 且不做跨块行缓冲。
@@ -155,7 +155,7 @@ console.log("[parse] 6. 旧实现对照 (预期: 分块后与整块不一致)")
         JSON.stringify(fresh.known) === JSON.stringify(base.known))
 }
 
-console.log("[parse] 6. 通用按行缓冲器的分块不变性")
+console.log("[parse] 6b. 通用按行缓冲器的分块不变性")
 {
     // libnfc-collect 的真实输出 (source/libnfc-collect/libnfc-collect.c:709),
     // 三个待检测子串都在这一条里, 跨块切开会全部取不到
@@ -178,6 +178,141 @@ console.log("[parse] 6. 通用按行缓冲器的分块不变性")
     const next = createLineSplitter()
     eq("末尾无换行的半行不产出", next("abc"), [])
     eq("补上换行后产出该行", next("def\n"), ["abcdef"])
+}
+
+
+console.log("[parse] 7. 距离攻击恢复阶段的密钥格式 (真实输出: 扇区头在上一行)")
+{
+    // source/mfoc/src/mfoc.c:555 的探测进度行末尾无换行, 568 继续打点, 571 才换行,
+    // 602 的 "  Found Key: A [hex]" 在换行之后 —— 扇区上下文在密钥的上一行, 必须跨行保持。
+    const p = createKeyInfoParser()
+    const out = []
+    out.push(...p.push("Sector 06 - Found   Key A: ffffffffffff Found   Key B: a0a1a2a3a4a5\n"))
+    out.push(...p.push("Sector 07 - Unknown Key A               Unknown Key B\n"))
+    eq("阶段一: 扇区 6 的 A 键", out[0], {key: "ffffffffffff", sector: 6, type: "A", recovered: false})
+    eq("阶段一: 扇区 6 的 B 键", out[1], {key: "a0a1a2a3a4a5", sector: 6, type: "B", recovered: false})
+    eq("阶段一: 未知密钥 A", out[2], {key: null, sector: 7, type: "A", recovered: false})
+    eq("阶段一: 未知密钥 B", out[3], {key: null, sector: 7, type: "B", recovered: false})
+    eq("阶段一产出条数", out.length, 4)
+
+    // 探测进度行: 不产出记录, 但要记住扇区上下文
+    eq("探测进度行本身不产出记录", p.push("Sector: 7, type A, probe 3, distance 12456 ......\n"), [])
+    eq("下一行才产出恢复的密钥 (跨行取上下文)", p.push("  Found Key: A [112233445566]\n"),
+        [{key: "112233445566", sector: 7, type: "A", recovered: true}])
+
+    // mfoc.c:496 / nfc-mfdetect.c:500 的快速路径: 扇区行自带换行
+    const p2 = createKeyInfoParser()
+    eq("快速路径: 扇区行同样不产出记录", p2.push("Sector: 9, type B\n"), [])
+    eq("快速路径: 之后一行取出 B 键", p2.push("  Found Key: B [aabbccddeeff]\n"),
+        [{key: "aabbccddeeff", sector: 9, type: "B", recovered: true}])
+
+    // 没有任何扇区上下文时不能凭空产出密钥
+    const p3 = createKeyInfoParser()
+    eq("缺少扇区上下文时不产出", p3.push("  Found Key: A [112233445566]\n"), [])
+}
+
+console.log("[parse] 8. 恢复出的密钥要移出待解列表")
+{
+    // 复刻 keyInfoStatistic 的处理逻辑, 验证 扇区+键位 精确匹配
+    const run = (lines) => {
+        const parser = createKeyInfoParser()
+        const unknown = []
+        const known = []
+        for (const line of lines) {
+            for (const record of parser.push(line)) {
+                if (record.key === null) {
+                    unknown.push([record.sector, record.type])
+                } else {
+                    known.push([record.key, record.sector, record.type])
+                    if (record.recovered) {
+                        const i = unknown.findIndex((u) => u[0] === record.sector && u[1] === record.type)
+                        if (i >= 0) unknown.splice(i, 1)
+                    }
+                }
+            }
+        }
+        return {unknown, known}
+    }
+    const lines = [
+        "Sector 07 - Unknown Key A               Unknown Key B\n",
+        "Sector: 7, type A, probe 3, distance 1 ......\n",
+        "  Found Key: A [112233445566]\n"
+    ]
+    let r = run(lines)
+    eq("恢复 A 后待解列表只剩 B", r.unknown, [[7, "B"]])
+    eq("恢复的密钥进入已知列表", r.known, [["112233445566", 7, "A"]])
+
+    // B 也在另一轮被恢复
+    r = run([...lines,
+        "Sector: 7, type B, probe 1, distance 2 ......\n",
+        "  Found Key: B [aabbccddeeff]\n"])
+    eq("A、B 分别恢复后待解列表清空", r.unknown, [])
+    eq("两个密钥都在已知列表", r.known.length, 2)
+
+    // 不同扇区的 B 不应被误删
+    r = run([
+        "Sector 07 - Unknown Key A               Unknown Key B\n",
+        "Sector 09 - Unknown Key A               Unknown Key B\n",
+        "Sector: 7, type A, probe 1, distance 1 ......\n",
+        "  Found Key: A [112233445566]\n"
+    ])
+    eq("只移除匹配的那一项", r.unknown, [[7, "B"], [9, "A"], [9, "B"]])
+
+    // 重复上报同一 (扇区,键位): 第二次应是无害 no-op, 不能误删别人的项
+    r = run([
+        "Sector 07 - Unknown Key A               Unknown Key B\n",
+        "Sector 09 - Unknown Key A               Unknown Key B\n",
+        "Sector: 7, type A, probe 1, distance 1 ......\n",
+        "  Found Key: A [112233445566]\n",
+        "Sector: 7, type A, probe 2, distance 2 ......\n",
+        "  Found Key: A [112233445566]\n"
+    ])
+    eq("重复上报不误删其它扇区", r.unknown, [[7, "B"], [9, "A"], [9, "B"]])
+}
+
+console.log("[parse] 9. 恢复格式的分块不变性")
+{
+    const text =
+        "Sector 06 - Found   Key A: ffffffffffff Found   Key B: a0a1a2a3a4a5\n" +
+        "Sector 07 - Unknown Key A               Unknown Key B\n" +
+        "Sector: 7, type A, probe 3, distance 12456 ......\n" +
+        "  Found Key: A [112233445566]\n"
+    const collect = (chunks) => {
+        const p = createKeyInfoParser()
+        const out = []
+        for (const c of chunks) out.push(...p.push(c))
+        return out
+    }
+    const base = collect([text])
+    eq("整块输入: 产出 5 条 (2+2+1)", base.length, 5)
+    eq("最后一条是恢复的密钥", base[4], {key: "112233445566", sector: 7, type: "A", recovered: true})
+    // 61/62 是把换行切开的粒度, 最容易暴露跨行状态丢失
+    for (const size of [1, 13, 60, 61, 62, 63, 64, 150, 512]) {
+        eq(`分块 ${size}B: 序列与整块一致`, collect(split(text, size)), base)
+    }
+}
+
+console.log("[parse] 10. 两个阶段的正则互不误匹配")
+{
+    const p = createKeyInfoParser()
+    eq("普通扇区行不触发恢复分支", p.push("Sector 07 - Unknown Key A               Unknown Key B\n").filter((r) => r.recovered), [])
+    const p2 = createKeyInfoParser()
+    p2.push("Sector: 7, type A, probe 3, distance 1 ......\n")
+    eq("恢复行不触发阶段一的重复计入", p2.push("  Found Key: A [112233445566]\n").filter((r) => !r.recovered), [])
+    const p3 = createKeyInfoParser()
+    eq("非 Mifare Classic 杂项输出不产出", p3.push("Found Mifare Classic Mini tag\n"), [])
+    const p4 = createKeyInfoParser()
+    p4.push("Sector: 7, type A, probe 1 ......\n")
+    eq("方括号内非 12 位 hex 不算恢复密钥", p4.push("  Found Key: A [123456789]\n"), [])
+    const p5 = createKeyInfoParser()
+    p5.push("Sector: 7, type A, probe 1 ......\n")
+    eq("缺方括号不算恢复密钥", p5.push("  Found Key: A 112233445566\n"), [])
+    const p6 = createKeyInfoParser()
+    p6.push("Sector: 7, type A, probe 1 ......\n")
+    eq("Data read 揭示 B 键的格式不被误收", p6.push("  Data read with Key A revealed Key B: [aabbccddeeff] - checking Auth: OK\n"), [])
+    const p7 = createKeyInfoParser()
+    p7.push("Sector: 12, type A, probe 1 ......\n")
+    eq("扇区号大于 9 (工具用 %d 不补零)", p7.push("  Found Key: A [112233445566]\n").map((r) => r.sector), [12])
 }
 
 console.log(failed === 0 ? "[parse] PASSED" : `[parse] FAILED (${failed})`)

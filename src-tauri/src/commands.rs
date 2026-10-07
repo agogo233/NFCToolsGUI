@@ -37,6 +37,18 @@ fn key_sector_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"Sector\s+(\d+)\s*-\s*(?:Found|Unknown)\s+Key\s+[AB]").unwrap())
 }
 
+// 距离攻击恢复阶段: 扇区上下文。探测进度行末尾没有换行符, 扇区与密钥在同一条物理行上,
+// 见 source/mfoc/src/mfoc.c:555, 因此正则不能加行尾锚定。
+fn recover_sector_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"Sector:\s*(\d+),\s*type\s*[AB]").unwrap())
+}
+
+fn recover_key_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"Found\s+Key:\s*([AB])\s*\[([0-9a-fA-F]{12})\]").unwrap())
+}
+
 fn key_info_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(Found|Unknown)\s+Key\s+([AB]):?\s*([0-9a-fA-F]{12})?").unwrap())
@@ -344,23 +356,50 @@ fn save_keys(app: &AppHandle, state: &Mutex<AppState>, new_keys: &[String]) {
 }
 
 fn key_info_statistic(state: &mut AppState, line: &str) {
+    // 阶段一: 内置密钥, 每扇区一行, A/B 两条密钥信息同属该行
     if let Some(caps) = key_sector_re().captures(line) {
         state.key_sector = caps.get(1).and_then(|m| m.as_str().parse::<i64>().ok());
     }
-    let Some(sector) = state.key_sector else {
-        return;
-    };
-    for caps in key_info_re().captures_iter(line) {
-        let key_type = caps.get(2).map(|m| m.as_str()).unwrap_or_default().to_string();
-        let key = caps.get(3).map(|m| m.as_str()).map(str::to_lowercase);
-        if caps.get(1).map(|m| m.as_str()) == Some("Found") {
-            // Found 但没抓到完整 12 位 hex 时跳过, 不把残缺结果当成已知密钥
-            if let Some(key) = key {
-                state.known_key_info.push((key.clone(), sector, key_type));
-                state.new_keys.push(key);
+    if let Some(sector) = state.key_sector {
+        for caps in key_info_re().captures_iter(line) {
+            let key_type = caps.get(2).map(|m| m.as_str()).unwrap_or_default().to_string();
+            let key = caps.get(3).map(|m| m.as_str()).map(str::to_lowercase);
+            if caps.get(1).map(|m| m.as_str()) == Some("Found") {
+                // Found 但没抓到完整 12 位 hex 时跳过, 不把残缺结果当成已知密钥
+                if let Some(key) = key {
+                    state.known_key_info.push((key.clone(), sector, key_type));
+                    state.new_keys.push(key);
+                }
+            } else {
+                state.unknown_key_info.push((sector, key_type));
             }
-        } else {
-            state.unknown_key_info.push((sector, key_type));
+        }
+    }
+
+    // 阶段二: 距离攻击恢复。扇区头与密钥是两条物理行 ——
+    // 探测进度行 "Sector: N, type A, probe .., distance .. " 后面先接点进度再换行
+    // (source/mfoc/src/mfoc.c:555/568/571), "  Found Key: A [hex]" 在换行之后才输出
+    // (同文件 602), 所以扇区上下文必须跨行保持。
+    if let Some(caps) = recover_sector_re().captures(line) {
+        state.recover_sector = caps.get(1).and_then(|m| m.as_str().parse::<i64>().ok());
+    }
+    if let Some(sector) = state.recover_sector {
+        for caps in recover_key_re().captures_iter(line) {
+            let Some(key) = caps.get(2).map(|m| m.as_str()).map(str::to_lowercase) else {
+                continue;
+            };
+            let key_type = caps.get(1).map(|m| m.as_str()).unwrap_or_default().to_string();
+            state.known_key_info.push((key.clone(), sector, key_type.clone()));
+            state.new_keys.push(key);
+            // 恢复出的密钥要同时移出待解列表, 否则自动模式会朝已解开的扇区再采集一轮。
+            // 必须按 扇区+键位 精确匹配: 外层循环跑两轮, 同一扇区的 A 和 B 可能分别恢复。
+            if let Some(i) = state
+                .unknown_key_info
+                .iter()
+                .position(|u| u.0 == sector && u.1 == key_type)
+            {
+                state.unknown_key_info.remove(i);
+            }
         }
     }
 }

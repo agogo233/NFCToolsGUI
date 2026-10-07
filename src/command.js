@@ -756,6 +756,15 @@ function keyInfoStatistic(content) {
         } else {
             knownKeyInfo.push([record.key, record.sector, record.type])
             newKeys.push(record.key)
+            // 距离攻击恢复出的密钥要同时移出待解列表, 否则门禁卡爆破会朝已解开的扇区
+            // 再采集一轮 nonce。必须按 扇区+键位 精确匹配: 外层循环跑两轮, 同一扇区的
+            // A 和 B 可能分别恢复, 只按扇区匹配会误删另一个键位。
+            // 连带效果: 全部扇区都未知的卡, 恢复出的键会成为 knownKeyInfo 的第一项,
+            // 门禁卡爆破窗口随之拿到一个已知密钥 —— 有已知密钥总比没有强。
+            if (record.recovered) {
+                const i = unknownKeyInfo.findIndex((u) => u[0] === record.sector && u[1] === record.type)
+                if (i >= 0) unknownKeyInfo.splice(i, 1)
+            }
         }
     }
 }

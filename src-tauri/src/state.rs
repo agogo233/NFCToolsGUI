@@ -10,6 +10,7 @@ pub struct AppState {
     pub unknown_key_info: Vec<(i64, String)>,
     pub total_unknown_keys: i64,
     pub key_sector: Option<i64>,
+    pub recover_sector: Option<i64>,
     pub dict_path: PathBuf,
     pub lang: String,
 }
@@ -28,5 +29,6 @@ impl AppState {
         self.known_key_info.clear();
         self.unknown_key_info.clear();
         self.key_sector = None;
+        self.recover_sector = None;
     }
 }

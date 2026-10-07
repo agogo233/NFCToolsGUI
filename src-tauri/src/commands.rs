@@ -1521,12 +1521,16 @@ fn dump_editor_choose_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value
         Some(name) => PathBuf::from(name),
         None => {
             let dict_dir = state.lock().unwrap().dict_path.clone();
-            let Some(path) = rfd::FileDialog::new()
+            let mut dialog = rfd::FileDialog::new()
                 .set_title(t(state, "dialog_title_choose_dump_file"))
                 .set_directory(&dict_dir)
-                .add_filter("Dump Files", &["mfd", "dump"])
-                .pick_file()
-            else {
+                .add_filter("Dump Files", &["mfd", "dump"]);
+            // 转储编辑器是独立子窗口, 对话框不挂父窗口时在 Windows 上可能被推到后台或
+            // 另一块屏幕, 用户看不见也点不到确认键。挂到当前编辑器窗口上, 保证模态显示。
+            if let Some(win) = app.get_webview_window("dumpEditor") {
+                dialog = dialog.set_parent(&win);
+            }
+            let Some(path) = dialog.pick_file() else {
                 return;
             };
             path
@@ -1557,15 +1561,19 @@ fn dump_editor_save(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     let save_as = arg.get("saveAs").and_then(|value| value.as_bool()).unwrap_or(false);
     let bytes = hex_to_bytes(hex_data);
     let target = if save_as {
-        let Some(path) = rfd::FileDialog::new()
+        let mut dialog = rfd::FileDialog::new()
             .set_title(t(state, "dialog_title_save_to"))
             .set_file_name(Path::new(url)
                 .file_name()
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_default())
-            .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
-            .save_file()
-        else {
+            .add_filter(t(state, "file_type_dump"), &["dump", "mfd"]);
+        // 转储编辑器是独立子窗口, 对话框不挂父窗口时在 Windows 上可能被推到后台或
+        // 另一块屏幕, 用户看不见也点不到确认键。挂到当前编辑器窗口上, 保证模态显示。
+        if let Some(win) = app.get_webview_window("dumpEditor") {
+            dialog = dialog.set_parent(&win);
+        }
+        let Some(path) = dialog.save_file() else {
             return;
         };
         path

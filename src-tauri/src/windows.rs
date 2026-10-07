@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use serde_json::json;
 use tauri::{
     webview::PageLoadEvent, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
@@ -99,6 +100,7 @@ pub fn create_main_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<()
 }
 
 pub fn create_settings_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<(), String> {
+    let speed = state.lock().unwrap().current_speed;
     create(
         app,
         state,
@@ -112,7 +114,7 @@ pub fn create_settings_window(app: &AppHandle, state: &Mutex<AppState>) -> Resul
         false,
         false,
         false,
-        None,
+        Some(("settings-speed", json!({ "speed": speed }))),
     )
 }
 

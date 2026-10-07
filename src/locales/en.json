@@ -79,9 +79,11 @@
 
   "html_tools": "Tools",
   "html_settings": "Settings",
+  "html_theme": "Theme",
   "html_theme_dark": "Dark Mode",
   "html_theme_light": "Light Mode",
   "html_theme_system": "Follow System",
+  "html_speed": "Communication Speed",
   "html_edit_history_key": "Edit Historical Keys",
   "html_dump_editor": "Dump Editor",
   "html_dump_comparator": "Dump Comparator",

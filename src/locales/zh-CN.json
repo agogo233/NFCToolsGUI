@@ -79,9 +79,11 @@
 
   "html_tools": "工具",
   "html_settings": "设置",
+  "html_theme": "主题",
   "html_theme_dark": "深色模式",
   "html_theme_light": "浅色模式",
   "html_theme_system": "跟随系统",
+  "html_speed": "通信速度",
   "html_edit_history_key": "编辑历史密钥",
   "html_dump_editor": "转储编辑器",
   "html_dump_comparator": "转储比较器",

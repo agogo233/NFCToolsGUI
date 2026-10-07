@@ -70,6 +70,7 @@
         onUpdateDumpEditorFile: (callback) => listen("update-dump-editor-file", callback),
         onUpdateDumpComparatorFile: (callback) => listen("update-dump-comparator-files", callback),
         onSettingNFCConfig: (callback) => listen("setting-nfc-config", callback),
+        onSettingsSpeed: (callback) => listen("settings-speed", callback),
         onCreateHardNestedWindow: (callback) => listen("update-hard-nested-config", callback),
         onCreateDictTestWindow: (callback) => listen("update-dict-test-config", callback),
         onCreateDumpHistoryWindow: (callback) => listen("update-dump-history", callback),

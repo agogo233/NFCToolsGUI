@@ -24,10 +24,11 @@ impl AppState {
         }
     }
 
-    pub fn reset_key_info(&mut self) {
+    pub fn reset_task_state(&mut self) {
         self.new_keys.clear();
         self.known_key_info.clear();
         self.unknown_key_info.clear();
+        self.total_unknown_keys = 0;
         self.key_sector = None;
         self.recover_sector = None;
     }

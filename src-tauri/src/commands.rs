@@ -276,7 +276,15 @@ fn run_task(
             return Err(err.to_string());
         }
     };
+    let mut last_lines: Vec<String> = Vec::new();
     while let Ok(line) = rx.recv() {
+        // 跳过进度重绘与控制码行(以及距离攻击的点进度), 只保留有业务含义的行作为错误上下文
+        if !line.contains("\u{1b}[2K") && !line.is_empty() {
+            last_lines.push(line.clone());
+            while last_lines.len() > 3 {
+                last_lines.remove(0);
+            }
+        }
         on_line(&line);
     }
     let slot = tasks.lock().unwrap().take_child();
@@ -303,9 +311,16 @@ fn run_task(
     };
     if code != 0 {
         print_log(app, &format!("\nexit code: {code}"));
+        let mut text = format!("{}{}", t(state, "event_task_failed"), code);
+        if !last_lines.is_empty() {
+            let detail: String = last_lines.join(" ");
+            let truncated: String = detail.chars().take(160).collect();
+            let ellipsis = if truncated.chars().count() < detail.chars().count() { "…" } else { "" };
+            text = format!("{text} | {truncated}{ellipsis}");
+        }
         app.emit(
             "update-events",
-            json!({ "type": "error", "text": format!("{}{}", t(state, "event_task_failed"), code) }),
+            json!({ "type": "error", "text": text }),
         )
         .ok();
         log_exit(app, state, 1);
@@ -479,7 +494,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
     check_key_file(&p.keys);
     let total = {
         let mut s = state.lock().unwrap();
-        s.reset_key_info();
+        s.reset_task_state();
         let file_keys = std::fs::read_to_string(&p.keys)
             .map(|text| hex12_re().find_iter(&text).count())
             .unwrap_or(0);
@@ -599,7 +614,7 @@ fn read_dump_phase(
 ) -> Result<TaskOutcome, String> {
     let p = paths(app);
     check_key_file(&p.keys);
-    state.lock().unwrap().reset_key_info();
+    state.lock().unwrap().reset_task_state();
     let status_text = if save_dump_file {
         t(state, "indicator_backing_up_current_card")
     } else {
@@ -763,7 +778,7 @@ fn format_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManag
 fn detect_card_type(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
     let p = paths(app);
     check_key_file(&p.keys);
-    state.lock().unwrap().reset_key_info();
+    state.lock().unwrap().reset_task_state();
     print_status(app, state, &t(state, "indicator_detecting_ic_card"));
     let args = vec!["-N".to_string(), format!("-f{}", p.keys.display())];
     let detect_msg = t(state, "log_msg_start_detect_card");
@@ -1215,7 +1230,9 @@ fn auto_hard_nested(
         }
         let cfg = {
             let mut s = state.lock().unwrap();
-            if from_user {
+            // total_unknown_keys 会被每轮的 read_dump_phase 重置清零, 所以除首轮外
+            // 归零也要重设, 否则第二轮起进度会显示 1/0 并冻结
+            if from_user || s.total_unknown_keys == 0 {
                 s.total_unknown_keys = s.unknown_key_info.len() as i64;
             }
             let (known_key, known_sector, known_key_type) = &s.known_key_info[0];
@@ -1626,6 +1643,22 @@ fn conn_usb_devices(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<Task
     set_nfc_config(app, state, tasks, &device)
 }
 
+fn set_speed(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, arg: &Value) {
+    let Some(speed) = arg.as_u64().map(|value| value as u32) else {
+        return;
+    };
+    state.lock().unwrap().current_speed = speed;
+    let device = state.lock().unwrap().current_device.clone();
+    if let Some(device) = device {
+        // 任务运行中跳过重连: 此时 set_nfc_config 会被"设备忙"拒绝并在主窗口提示连接失败
+        if tasks.lock().unwrap().is_running() {
+            return;
+        }
+        // 速度只写进状态不会生效, 必须重写 libnfc.conf 并重连
+        set_nfc_config(app, state, tasks, &device);
+    }
+}
+
 fn set_nfc_config(
     app: &AppHandle,
     state: &Mutex<AppState>,
@@ -1753,6 +1786,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         }
         "scan-usb-devices" => scan_usb_devices(&app),
         "conn-usb-devices" => conn_usb_devices(&app, &state, &tasks, &arg),
+        "set-speed" => set_speed(&app, &state, &tasks, &arg),
         "read-IC" => read_ic(&app, &state, &tasks),
         "write-IC" => write_ic(&app, &state, &tasks, &arg),
         "format-card" => format_card(&app, &state, &tasks),
@@ -1835,7 +1869,9 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "open-about" => {
             windows::create_about_window(&app, &state).ok();
         }
-        _ => {}
+        _ => {
+            print_log(&app, &format!("\nunknown action: {action}"));
+        }
     }
 }
 

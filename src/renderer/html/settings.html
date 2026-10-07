@@ -10,13 +10,28 @@
 </head>
 <body>
 
+<div class="title">{{ html_theme }}</div>
 <button id="dark-mode" onclick="window.darkMode.dark()">{{ html_theme_dark }}</button>
 <button id="light-mode" onclick="window.darkMode.light()">{{ html_theme_light }}</button>
 <button id="follow-system-mode" onclick="window.darkMode.system()">{{ html_theme_system }}</button>
+
+<div class="title">{{ html_speed }}</div>
+<select id="speed-select" onchange="window.electronAPI.execAction('set-speed', parseInt(this.value))">
+    <option value="115200">115200</option>
+    <option value="230400">230400</option>
+    <option value="460800">460800</option>
+    <option value="921600">921600</option>
+</select>
 
 <div class="final-button">
     <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
 </div>
 </body>
 <script src="../js/i18n.js"></script>
+<script>
+    window.electronAPI.onSettingsSpeed((_event, value) => {
+        const sel = document.getElementById("speed-select")
+        if (sel && value && value.speed) sel.value = String(value.speed)
+    })
+</script>
 </html>

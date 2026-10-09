@@ -1069,7 +1069,8 @@ fn phw_write_data(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMa
     };
     let sector = arg.get("sector").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
     let block = arg.get("block").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
-    if !(0..=15).contains(&sector) || !(0..=3).contains(&block) {
+    // 块 0 为只读 UID 块、块 3 为扇区尾块(密钥/ACL), 均不允许覆盖
+    if !(0..=15).contains(&sector) || !(1..=2).contains(&block) {
         show_error(
             app,
             state,

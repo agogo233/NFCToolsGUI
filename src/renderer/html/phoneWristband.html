@@ -43,9 +43,14 @@
     function phwWriteData() {
         const sector = parseInt(document.getElementById("phw-sector").value, 10)
         const block = parseInt(document.getElementById("phw-block").value, 10)
+        // 块 0 为只读 UID 块、块 3 为扇区尾块(密钥/ACL), 只允许数据块 1-2
+        if (isNaN(sector) || isNaN(block) || sector < 0 || sector > 15 || block < 1 || block > 2) {
+            alert(window.electronAPI.getText("dialog_msg_phw_sector_block_invalid"))
+            return
+        }
         window.electronAPI.execAction("phw-write-data", {
-            sector: isNaN(sector) ? 0 : sector,
-            block: isNaN(block) ? 1 : block
+            sector: sector,
+            block: block
         })
         window.electronAPI.closeCurrentWindow()
     }

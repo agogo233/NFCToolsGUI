@@ -60,6 +60,31 @@ fn create(
     .initialization_script(&init_script(state));
     if let Some(parent) = &parent {
         builder = builder.parent(parent).map_err(|err| err.to_string())?;
+        // Windows 下 tauri 的 parent() 实际建的是 owner 窗口(WS_POPUP, 不是 WS_CHILD),
+        // 所以 position() 是屏幕绝对坐标。若上游改成真子窗口, 坐标会变成父客户区内
+        // 相对值, 这段算法必须整体重写。
+        // outer_position/outer_size 返回物理像素, 而 position() 收逻辑像素,
+        // 所以先把父窗口几何各自换算到逻辑空间, 再在逻辑空间做居中减法。
+        // 注意不能写成 (size.width - width)/2/scale: 那样物理与逻辑像素会在
+        // 除 scale 之前混合相加, 只在 scale==1 时凑巧正确, 高缩放下会整体偏移。
+        // 取不到几何就跳过定位, 退回系统默认位置, 不能因此打不开窗口。
+        // 已知偏差: position() 定位的是窗口边框左上角, 而 width/height 是客户区
+        // 尺寸, 故 about 这类带标题栏的窗口居中后会比几何中心偏上约半个标题栏。
+        // 另: 父窗口横跨不同 DPI 的多屏时, tao 按落点所在显示器的 scale 反算,
+        // 与这里用的父窗口 scale 可能不一致, 会带来少量偏移。
+        if let (Ok(pos), Ok(size), Ok(scale)) = (
+            parent.outer_position(),
+            parent.outer_size(),
+            parent.scale_factor(),
+        ) {
+            if scale > 0.0 {
+                let parent_w = size.width as f64 / scale;
+                let parent_h = size.height as f64 / scale;
+                let x = pos.x as f64 / scale + (parent_w - width as f64) / 2.0;
+                let y = pos.y as f64 / scale + (parent_h - height as f64) / 2.0;
+                builder = builder.position(x, y);
+            }
+        }
     }
     if let Some((channel, value)) = payload {
         let handle = app.clone();

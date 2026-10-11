@@ -9,7 +9,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "test:ui": "node test/ui/runner.js",
-    "test:parse": "node test/parse/keyParser.test.js"
+    "test:parse": "node test/parse/keyParser.test.js && node test/parse/dumpTools.test.js"
   },
   "license": "AGPL-3.0",
   "dependencies": {

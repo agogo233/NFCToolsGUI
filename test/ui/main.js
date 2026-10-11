@@ -62,6 +62,8 @@ const injectIndex = (wc) => {
     wc.send("update-device-status", {state: "connected", device: "GSWX-0001"})
     wc.send("update-events", {type: "key", text: "sample: 2 keys saved"})
     wc.send("update-log-output", logLines)
+    // 解卡保存成功后会弹出引导条, 它会把主按钮区顶进固定控制台, 必须在这个状态下做几何断言
+    wc.send("show-guidance", {text: "Guidance sample", buttons: [{action: "open-dump-folder", label: "Open dump folder"}]})
 }
 const injectHardNested = (wc) => {
     wc.send("update-hard-nested-config", {knownKey: "ffffffffffff", knownSector: "0", knownKeyType: "A", targetSector: "3", targetKeyType: "B"})
@@ -96,10 +98,10 @@ const PAGES = [
     {
         name: "index", file: "index.html", sizes: [[800, 740, "std"]],
         inject: injectIndex,
-        rects: ["#title-bar", "#device-status-bar", ".main-button-area", ".bottom-area", "#log", "#left-bar .bar-button"],
+        rects: ["#title-bar", "#device-status-bar", ".main-button-area", ".bottom-area", "#guidance-bar", "#log", "#left-bar .bar-button"],
         soft: [
             ["#log", "w", 694],
-            [".bottom-area", "h", 400],
+            [".bottom-area", "h", 368],
         ],
         checks(ctx) {
             const m = ctx.m

@@ -2432,9 +2432,14 @@ fn scan_usb_devices(app: &AppHandle) {
         .into_iter()
         .flatten()
         .map(|port| {
+            // SerialPortInfo 没有 vendor_id 字段; USB 口的 VID 在 port_type 里
+            let vendor_id = match &port.port_type {
+                serialport::SerialPortType::UsbPort(info) => Some(info.vid),
+                _ => None,
+            };
             json!({
                 "path": port.port_name,
-                "vendorId": port.vendor_id,
+                "vendorId": vendor_id,
             })
         })
         .collect();
@@ -2513,7 +2518,9 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "dict-test-config-done" => dict_test_config_done(&app, &state, &tasks, &arg),
         "open-history-keys" => open_history_keys(&app),
         "merge-nonces" => merge_nonces(&app, &state, &tasks, &arg),
-        "open-merge-nonces-window" => windows::create_merge_nonces_window(&app, &state).ok(),
+        "open-merge-nonces-window" => {
+            windows::create_merge_nonces_window(&app, &state).ok();
+        }
         "pick-nonce-files" => pick_nonce_files(&app, &state),
         "open-dump-editor" => open_dump_editor(&app, &state, &arg),
         "dump-editor-choose-file" => dump_editor_choose_file(&app, &state, &arg),

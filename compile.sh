@@ -173,6 +173,30 @@ autoreconf -vis
 make && make install
 
 
+# mfcuk (full-encryption key recovery, stage 8)
+# 上游 nfc-tools/mfcuk 只更新到 2018 年且无 CI, 在 MinGW 上有三处坑, 与 mfoc 的
+# errno 补丁同款: 在构建期打补丁, 不提交进子模块。
+# 1) 配置里的字节序硬检查: 拿不到 endian.h 就 AC_MSG_ERROR, 降级为提示 (代码自带 bswap 回退)
+# 2) mfcuk_utils.c 写死 #if defined(WIN32), 而 MinGW 只定义 _WIN32
+# 3) 强制用自带的 xgetopt.c, 避开 MinGW 没有 POSIX getopt 的问题 (ac_cv_header_unistd_h=no)
+# err.h 不需要单独打补丁: 上面的 libnfc 步骤已把 contrib/win32/err.h 装进 $prefix/include
+echo
+echo
+echo "============================== mfcuk =============================="
+cd "$source"/mfcuk
+if [ "$os" = "MINGW64" ]; then
+    sed -i 's/AC_MSG_ERROR(\["Can.*/AC_MSG_NOTICE(["endianness header not found; using bswap fallback"])/' configure.ac
+    sed -i 's/#if defined(WIN32)/#if defined(_WIN32) || defined(WIN32)/' src/mfcuk_utils.c
+    sed -i 's/#ifdef WIN32/#if defined(_WIN32) || defined(WIN32)/' src/mfcuk_utils.c
+    autoreconf -vis
+    LIBS=$prefix/lib/libnfc.a ./configure LDFLAGS=-L"$prefix"/lib CPPFLAGS=-I"$prefix"/include PKG_CONFIG=: prefix="$prefix" ac_cv_header_unistd_h=no
+else
+    autoreconf -vis
+    ./configure LDFLAGS=-L"$prefix"/lib PKG_CONFIG_PATH="$prefix"/lib/pkgconfig prefix="$prefix"
+fi
+make && make install
+
+
 # libnfc_collect
 echo
 echo
@@ -218,7 +242,9 @@ mv "$prefix"/bin/* "$prefix"/bin2/
 mv "$prefix"/bin2/nfc-list* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mfclassic* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mfdict* "$prefix"/bin
+# mfoc 与 mfcuk 是不同名字 (mfc… ≠ mfoc…), 各用一个 glob 收; 两个文件都在 bin2, 互不冲突
 mv "$prefix"/bin2/mfoc* "$prefix"/bin
+mv "$prefix"/bin2/mfcuk* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mfdetect* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mflock* "$prefix"/bin
 mv "$prefix"/bin2/nfc-mfsetuid* "$prefix"/bin

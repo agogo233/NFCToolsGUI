@@ -26,3 +26,6 @@
 	path = source/mfoc
 	url = https://github.com/agogo233/mfoc.git
 	branch = master
+[submodule "source/mfcuk"]
+	path = source/mfcuk
+	url = https://github.com/nfc-tools/mfcuk.git

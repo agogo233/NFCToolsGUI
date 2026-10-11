@@ -4,11 +4,11 @@
 	branch = libnfc
 [submodule "source/nfc-mfdetect"]
 	path = source/nfc-mfdetect
-	url = https://github.com/GSWXXN/mfoc.git
+	url = https://github.com/agogo233/mfoc.git
 	branch = nfc-mfdetect
 [submodule "source/nfc-mfdict"]
 	path = source/nfc-mfdict
-	url = https://github.com/GSWXXN/mfoc.git
+	url = https://github.com/agogo233/mfoc.git
 	branch = nfc-mfdict
 [submodule "source/nfc-mflock"]
 	path = source/nfc-mflock
@@ -24,5 +24,5 @@
 	branch = libnfc_collect
 [submodule "source/mfoc"]
 	path = source/mfoc
-	url = https://github.com/GSWXXN/mfoc.git
+	url = https://github.com/agogo233/mfoc.git
 	branch = master

@@ -24,13 +24,29 @@ body {
     background: linear-gradient(to right, transparent, var(--color-divider), transparent);
 }
 
-label:not(.radio-wrapper):not(.checkbox-wrapper) {
+label:not(.radio-wrapper):not(.checkbox-wrapper):not(.switch-row) {
     display: inline-block;
     padding-right: 8px;
     width: 80px;
     text-align: right;
     white-space: nowrap;
     font-size: var(--fs-base);
+}
+
+.switch-row {
+    display: block;
+    margin: var(--space-4) var(--space-6);
+    text-align: left;
+    font-size: var(--fs-base);
+}
+
+.switch-row input {
+    margin-right: var(--space-3);
+    vertical-align: middle;
+}
+
+.switch-row span {
+    vertical-align: middle;
 }
 
 input[type="text"] {

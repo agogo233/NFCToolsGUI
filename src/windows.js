@@ -57,7 +57,7 @@ const createSettingsWindow = () => {
         parent: mainWindow,
         modal: true,
         width: 400,
-        height: process.platform === "win32" ? 470 : 510,
+        height: 720,
         show: false,
         resizable: false,
         maximizable: false,

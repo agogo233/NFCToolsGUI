@@ -14,6 +14,14 @@ pub struct AppState {
     pub dict_path: PathBuf,
     pub lang: String,
     pub phw_block0: Option<String>,
+    pub theme: String,
+    /// 扫描到恰好一个已知桥接芯片的串口时自动连接。
+    /// 列表里有多个或零个匹配时保持手动选择 —— 直接取列表第一项会连到蓝牙虚拟串口之类的无关设备。
+    pub auto_select_device: bool,
+    /// 解卡结果直接落盘, 不弹保存对话框
+    pub silent_save_dump: bool,
+    /// 启用复杂卡求解 (mfcuk Darkside), 默认关闭; 求解器随构建附带, 缺失时按钮功能自动降级
+    pub full_enc_enabled: bool,
 }
 
 impl AppState {
@@ -21,6 +29,10 @@ impl AppState {
         Self {
             current_speed: 115200,
             lang: "en".to_string(),
+            theme: "system".to_string(),
+            auto_select_device: false,
+            silent_save_dump: false,
+            full_enc_enabled: false,
             ..Default::default()
         }
     }

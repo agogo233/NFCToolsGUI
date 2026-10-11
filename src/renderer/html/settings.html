@@ -23,15 +23,51 @@
     <option value="921600">921600</option>
 </select>
 
+<div class="title">{{ html_device_group }}</div>
+<label class="switch-row">
+    <input type="checkbox" id="auto-select-device">
+    <span>{{ html_auto_select_device }}</span>
+</label>
+
+<div class="title">{{ html_dump_group }}</div>
+<label class="switch-row">
+    <input type="checkbox" id="silent-save-dump">
+    <span>{{ html_silent_save_dump }}</span>
+</label>
+
+<div class="title">{{ html_solving_group }}</div>
+<label class="switch-row">
+    <input type="checkbox" id="full-enc-solve">
+    <span>{{ settings_full_enc_label }}</span>
+</label>
+
 <div class="final-button">
     <button onclick="window.electronAPI.closeCurrentWindow()">{{ dialog_button_cancel }}</button>
 </div>
 </body>
 <script src="../js/i18n.js"></script>
 <script>
-    window.electronAPI.onSettingsSpeed((_event, value) => {
-        const sel = document.getElementById("speed-select")
-        if (sel && value && value.speed) sel.value = String(value.speed)
+    const setSetting = (key, value) => window.electronAPI.execAction('set-setting', {key, value})
+
+    window.electronAPI.onSettingsValues((_event, value) => {
+        const speed = document.getElementById("speed-select")
+        if (speed && value && value.speed) speed.value = String(value.speed)
+        const autoSelect = document.getElementById("auto-select-device")
+        if (autoSelect && value) autoSelect.checked = !!value.autoSelectDevice
+        const silentSave = document.getElementById("silent-save-dump")
+        if (silentSave && value) silentSave.checked = !!value.silentSaveDump
+        const fullEnc = document.getElementById("full-enc-solve")
+        if (fullEnc && value) fullEnc.checked = !!value.fullEncEnabled
+    })
+
+    document.getElementById("auto-select-device").addEventListener("change", (e) => {
+        setSetting("autoSelectDevice", e.target.checked)
+    })
+    document.getElementById("silent-save-dump").addEventListener("change", (e) => {
+        setSetting("silentSaveDump", e.target.checked)
+    })
+    document.getElementById("full-enc-solve").addEventListener("change", (e) => {
+        setSetting("fullEncEnabled", e.target.checked)
     })
 </script>
 </html>

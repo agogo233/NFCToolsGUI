@@ -1,0 +1,34 @@
+#merge-hint {
+    margin: 0 var(--space-6) var(--space-5);
+    font-size: var(--fs-xs);
+    color: var(--color-disabled-fg);
+    text-align: left;
+    line-height: 1.5;
+}
+
+#picked-files {
+    margin: 0 var(--space-6);
+    text-align: left;
+}
+
+.nonce-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0;
+    font-size: var(--fs-xs);
+}
+
+.nonce-item-name {
+    font-family: var(--font-mono);
+    word-break: break-all;
+}
+
+.nonce-item-remove {
+    height: auto;
+    margin: 0;
+    padding: 0 6px;
+    font-size: var(--fs-xs);
+    line-height: 1.4;
+    cursor: pointer;
+}

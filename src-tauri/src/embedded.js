@@ -23,6 +23,14 @@
             })
         })
     }
+    function persistTheme(theme) {
+        invoke("exec_action", {action: "set-setting", arg: {key: "theme", value: theme}})
+    }
+    function applyStoredTheme() {
+        var theme = window.__THEME__
+        if (!theme || theme === "system") return
+        currentWindow().setTheme(theme)
+    }
     function showWhenReady(attempt) {
         if (window.__TAURI__) {
             currentWindow().show()
@@ -55,6 +63,7 @@
     } else {
         markDragRegions()
     }
+    applyStoredTheme()
     window.electronAPI = {
         devicePrefix: "/dev/tty.",
         platform: "win32",
@@ -70,7 +79,7 @@
         onUpdateDumpEditorFile: (callback) => listen("update-dump-editor-file", callback),
         onUpdateDumpComparatorFile: (callback) => listen("update-dump-comparator-files", callback),
         onSettingNFCConfig: (callback) => listen("setting-nfc-config", callback),
-        onSettingsSpeed: (callback) => listen("settings-speed", callback),
+        onSettingsValues: (callback) => listen("settings-values", callback),
         onCreateHardNestedWindow: (callback) => listen("update-hard-nested-config", callback),
         onCreateDictTestWindow: (callback) => listen("update-dict-test-config", callback),
         onCreateDumpHistoryWindow: (callback) => listen("update-dump-history", callback),
@@ -78,9 +87,11 @@
         onOpenDumpFile: (callback) => listen("binary-data", callback),
         onSavedDumpFile: (callback) => listen("saved-binary-data", callback),
         onUpdatePhwBlock0: (callback) => listen("update-phw-block0", callback),
+        onUpdateNonceFiles: (callback) => listen("update-nonce-files", callback),
 
         getVersion: () => invoke("get_app_version"),
         getBuilder: () => invoke("get_builder"),
+        getSettings: () => window.__SETTINGS__ || {},
         closeCurrentWindow: () => currentWindow().close(),
         minimizeCurrentWindow: () => currentWindow().minimize(),
         openLink: (link) => invoke("open_link", { url: link }),
@@ -92,8 +103,8 @@
         getLanguage: () => window.__I18N_LANG__ || "en",
     }
     window.darkMode = {
-        light: () => setThemeAll("light"),
-        dark: () => setThemeAll("dark"),
-        system: () => setThemeAll(null),
+        light: () => {setThemeAll("light"); persistTheme("light")},
+        dark: () => {setThemeAll("dark"); persistTheme("dark")},
+        system: () => {setThemeAll(null); persistTheme("system")},
     }
 })()

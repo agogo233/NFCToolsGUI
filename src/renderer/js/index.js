@@ -1,6 +1,9 @@
 let mainProcess = window["electronAPI"]
 let currentUSBPorts = []
 let isConnectingDevice = false
+let autoConnected = false
+// 用户手动选过设备后, 不再把"自动连接"当作未决事项处理
+let statusTouchedManually = false
 let isLockScroll = false
 let isTimerRunning = false;
 let intervalID = undefined;
@@ -75,7 +78,27 @@ mainProcess.onUpdateStatus((_event, value) => {
     }
 })
 
-// 接收更新 USB 设列表
+// 已知 USB-串口桥接芯片的厂商 ID。PN532 读卡器多接在 CH341 上, 用它过滤掉
+// 蓝牙虚拟串口、打印机之类的无关端口。
+// 建窗时注入的设置是快照, 用户改了开关后主进程会推送新值, 这里接住
+let SETTINGS = {}
+// 复杂卡求解默认关闭; 设置里打开后, 破解栏才显示 "解全加密卡" 按钮。
+function applyFullEncVisibility() {
+    $("#dec-full-card").toggle(!!(SETTINGS && SETTINGS.fullEncEnabled))
+}
+mainProcess.onSettingsValues((_event, value) => {
+    if (value && typeof value === "object") {
+        SETTINGS = value
+        applyFullEncVisibility()
+    }
+})
+if (mainProcess.getSettings) Object.assign(SETTINGS, mainProcess.getSettings())
+applyFullEncVisibility()
+
+const KNOWN_VENDOR_IDS = [0x1a86]
+
+// 收到设备列表更新。自动连接只在"恰好一个已知桥接芯片"时触发 —— 直接取列表第一项
+// 会连到蓝牙虚拟串口之类的无关设备。连接失败时复位 autoConnected, 用户重新插拔后还能自动连。
 mainProcess.onUpdateUSBDevices((_event, value) => {
     if (isListEqual(value, currentUSBPorts)) return
     currentUSBPorts = value
@@ -83,17 +106,28 @@ mainProcess.onUpdateUSBDevices((_event, value) => {
     usbPorts.empty()
 
     value.forEach((v) => {
+        const path = typeof v === "string" ? v : v.path
         const deviceItemSpan = document.createElement("span")
         deviceItemSpan.setAttribute("class", "text")
-        deviceItemSpan.innerText = v.replace(mainProcess.devicePrefix, "")
+        deviceItemSpan.innerText = path.replace(mainProcess.devicePrefix, "")
 
         const deviceItem = document.createElement("li")
         deviceItem.setAttribute("class", "menu-item")
-        deviceItem.setAttribute("data-value", v)
+        deviceItem.setAttribute("data-value", path)
         deviceItem.setAttribute("data-label", deviceItemSpan.innerText)
         deviceItem.appendChild(deviceItemSpan)
         usbPorts.append(deviceItem)
     })
+
+    if (autoConnected || isConnectingDevice) return
+    const matches = value.filter((v) => typeof v !== "string" && KNOWN_VENDOR_IDS.includes(v.vendorId))
+    if (matches.length !== 1) return
+    if (!SETTINGS.autoSelectDevice) return
+    const path = matches[0].path
+    autoConnected = true
+    $("#usb-port-value").val(path)
+    $("#usb-port-label").val(path.replace(mainProcess.devicePrefix, ""))
+    mainProcess.execAction('conn-usb-devices', path)
 })
 
 // 显示引导条
@@ -195,6 +229,8 @@ mainProcess.onUpdateDeviceStatus((_event, value) => {
         case "failed":
             indicator.css("background-color", "#cf4152")
             text.html(i18n("html_device_failed"))
+            // 自动连接失败后复位, 用户重新插拔读卡器后下一轮扫描还能自动连
+            if (!statusTouchedManually) autoConnected = false
             break
         default:
             indicator.css("background-color", "var(--color-disabled-fg)")
@@ -242,6 +278,7 @@ function selectedValue(obj, e){
     $('#'+operationID+'-label').val(selectedLabel);
     $('#'+operationID+'-value').val(selectedValue);
     $(obj).parent().hide();
+    statusTouchedManually = true
     mainProcess.execAction('conn-usb-devices', selectedValue)
 }
 

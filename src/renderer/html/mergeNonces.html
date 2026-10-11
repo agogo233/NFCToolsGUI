@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ html_nonce_merge_title }}</title>
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/subWindow.css">
+    <link rel="stylesheet" href="../css/mergeNonces.css">
+    <link rel="stylesheet" href="../css/scrollBar.css">
+</head>
+<body>
+
+<div class="sub-title">{{ html_nonce_merge_title }}</div>
+<div id="merge-hint">{{ html_nonce_merge_hint }}</div>
+
+<div class="final-button">
+    <button id="pick-files">{{ html_nonce_merge_pick }}</button>
+    <button id="merge-run">{{ html_nonce_merge_run }}</button>
+</div>
+
+<div id="picked-files"></div>
+
+</body>
+<script src="../js/jquery-3.7.1.min.js"></script>
+<script src="../js/i18n.js"></script>
+<script>
+    let picked = []
+
+    window.electronAPI.onUpdateNonceFiles((_event, files) => {
+        files.forEach((file) => {
+            if (picked.includes(file)) return
+            picked.push(file)
+            render()
+        })
+    })
+
+    function render() {
+        const $list = $('#picked-files').empty()
+        if (picked.length === 0) return
+        picked.forEach((file) => {
+            const name = file.split(/[\/\\]/g).pop()
+            const $row = $('<div>').addClass("nonce-item")
+            $row.append($('<span>').addClass("nonce-item-name").text(name))
+            const $remove = $('<button>').addClass("nonce-item-remove").text("×")
+            $remove.on('click', () => {
+                picked = picked.filter((item) => item !== file)
+                render()
+            })
+            $row.append($remove)
+            $list.append($row)
+        })
+    }
+
+    $('#pick-files').click(() => {
+        window.electronAPI.execAction('pick-nonce-files')
+    })
+
+    $('#merge-run').click(() => {
+        window.electronAPI.execAction('merge-nonces', picked)
+    })
+</script>
+</html>

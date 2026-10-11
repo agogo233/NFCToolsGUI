@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use serde_json::json;
 use tauri::{
     webview::PageLoadEvent, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
@@ -11,10 +10,15 @@ use crate::state::AppState;
 const BRIDGE_JS: &str = include_str!("embedded.js");
 
 fn init_script(state: &Mutex<AppState>) -> String {
-    let lang = state.lock().unwrap().lang.clone();
+    // settings::payload 会自己加锁, 这里必须先放掉 guard 再取, 否则 Mutex 不可重入会死锁
+    let (lang, theme) = {
+        let guard = state.lock().unwrap();
+        (guard.lang.clone(), guard.theme.clone())
+    };
+    let settings = crate::settings::payload(state);
     let json = crate::i18n::locale_json(&lang);
     format!(
-        "window.__I18N__ = {json};\nwindow.__I18N_LANG__ = {lang:?};\n{BRIDGE_JS}"
+        "window.__I18N__ = {json};\nwindow.__I18N_LANG__ = {lang:?};\nwindow.__THEME__ = {theme:?};\nwindow.__SETTINGS__ = {settings};\n{BRIDGE_JS}"
     )
 }
 
@@ -125,21 +129,20 @@ pub fn create_main_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<()
 }
 
 pub fn create_settings_window(app: &AppHandle, state: &Mutex<AppState>) -> Result<(), String> {
-    let speed = state.lock().unwrap().current_speed;
     create(
         app,
         state,
         "settings",
         "settings",
         400,
-        470,
+        720,
         main_window(app),
         false,
         false,
         false,
         false,
         false,
-        Some(("settings-speed".to_string(), json!({ "speed": speed }))),
+        Some(("settings-values".to_string(), crate::settings::payload(state))),
     )
 }
 
@@ -312,6 +315,27 @@ pub fn create_phone_wristband_window(
         "phoneWristband",
         400,
         380,
+        main_window(app),
+        false,
+        false,
+        false,
+        false,
+        false,
+        None,
+    )
+}
+
+pub fn create_merge_nonces_window(
+    app: &AppHandle,
+    state: &Mutex<AppState>,
+) -> Result<(), String> {
+    create(
+        app,
+        state,
+        "mergeNonces",
+        "mergeNonces",
+        420,
+        460,
         main_window(app),
         false,
         false,

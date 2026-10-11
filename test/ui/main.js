@@ -13,14 +13,17 @@ const texts = JSON.parse(fs.readFileSync(path.join(ROOT, "src/locales", `${LANG}
 
 // 示例数据(固定内容, 保证断言可复现)
 const sector = (lines) => lines.join("\n")
-const editorSectors = [
-    sector(["0000000000000000000000000000FFFF", "4807E000000000000000000000000000", "A0000000000000000000000000000000", "FF078000000000000000000000000000"]),
-    sector(["01020304050607080910111213141516", "1718191A1B1C1D1E1F20212223242526", "2728292A2B2C2D2E2F30313233343536", "3738393A3B3C3D3E3F40414243444546"]),
-    sector(["AABBCCDDEEFF00112233445566778899", "99887766554433221100FFEEDDCCBBAA", "00001111222233334444555566667777", "77776666555544443333222211110000"]),
-    sector(["12345678ABCDEF0123456789ABCDEF01", "23456789ABCDEF0123456789ABCDEF0123", "00000000000000000000000000000000", "11112222333344445555666677778888"]),
-    sector(["DEADBEEFCAFEBABEDEADBEEFCAFEBABE", "FEEDFACEF00DFACEDEADBEEFCAFEBABE", "3333444455556666777788889999AAAA", "BBBCCCDD111122223333444455556666"]),
-    sector(["0F0E0D0C0B0A09080706050403020100", "000102030405060708090A0B0C0D0E0F", "FEDCBA9876543210FEDCBA9876543210", "0102030405060708090A0B0C0D0E0F10"]),
-]
+// 1K 卡完整布局 (16 扇区): 扇区 0 的 BCC 故意写错 (01^02^03^04=04, 实际写 05),
+// 扇区 2 的访问位故意写坏 (全 0), 其余扇区用 nfc-mfclassic 的默认访问位 FF 07 80 69
+const editorSectors = []
+const goodBlock3 = "FF078069"
+for (let s = 0; s < 16; s++) {
+    const block0 = s === 0 ? "01020304050804000000000000000000" : "00000000000000000000000000000000"
+    const block1 = "00000000000000000000000000000000"
+    const block2 = "00000000000000000000000000000000"
+    const block3 = s === 2 ? "FFFFFFFFFFFF00000000FFFFFFFFFFFF" : "FFFFFFFFFFFF" + goodBlock3 + "FFFFFFFFFFFF"
+    editorSectors.push(sector([block0, block1, block2, block3]))
+}
 const cmpSector = (base) => [
     "0000000000000000000000000000FFFF",
     "4807E000000000000000000000000000",
@@ -81,6 +84,12 @@ const injectDumpHistory = (wc) => {
 const injectPhoneWristband = (wc) => {
     wc.send("update-phw-block0", {block0: "01020304040804000000000000000000"})
 }
+const injectMergeNonces = (wc) => {
+    wc.send("update-nonce-files", ["aabbccdd_3A.bin", "aabbccdd_3A_1.bin", "11223344_7B.bin"])
+}
+const injectSettings = (wc) => {
+    wc.send("settings-values", {speed: 230400, theme: "dark", autoSelectDevice: true, silentSaveDump: true, fullEncEnabled: true})
+}
 
 // 各页尺寸: 与 src/windows.js 一致, tag 区分 win32 小尺寸组与其他平台组
 const PAGES = [
@@ -110,9 +119,10 @@ const PAGES = [
         },
     },
     {
-        name: "settings", file: "settings.html", sizes: [[400, 510, "std"], [400, 470, "win32"]],
+        name: "settings", file: "settings.html", sizes: [[400, 720, "std"]],
+        inject: injectSettings,
         framePessimistic: "win32-only",
-        rects: [".final-button button"],
+        rects: [".final-button button", "#auto-select-device", "#silent-save-dump", "#full-enc-solve"],
         css: [{sel: ".final-button button", props: ["height", "margin-right", "margin-top"]}],
         cssSoft: [
             [".final-button button", "height", "30px"],
@@ -195,14 +205,38 @@ const PAGES = [
     {
         name: "dumpEditor", file: "dumpEditor.html", sizes: [[380, 720, "std"]],
         inject: injectDumpEditor,
+        // 点"体检全卡"后采集: 既验证交互生效, 也让 footer-coverage 在结果区有内容的状态下测
+        act: `document.getElementById("check-dump").click(); true`,
         scrollable: true,
-        css: [{sel: "#update-tag-color", props: ["margin-top", "margin-right", "margin-bottom", "margin-left"]}],
+        rects: ["#bottom-area", "#check-result"],
+        texts: ["#check-result"],
+        counts: [".binary-input.has-error"],
+        css: [
+            {sel: "#update-tag-color", props: ["margin-top", "margin-right", "margin-bottom", "margin-left"]},
+            {sel: "body", props: ["margin-bottom"]},
+        ],
         cssSoft: [
             ["#update-tag-color", "margin-top", "0px"],
             ["#update-tag-color", "margin-right", "10px"],
             ["#update-tag-color", "margin-bottom", "0px"],
             ["#update-tag-color", "margin-left", "15px"],
         ],
+        checks(ctx) {
+            const m = ctx.m
+            const out = []
+            // 夹具里扇区 0 BCC 错 + 扇区 2 访问位坏, 体检必须恰好标红这两个分组
+            const errCount = (m.counts && m.counts[".binary-input.has-error"]) || 0
+            out.push({name: "check-marks-exact-sectors", ok: errCount === 2, detail: `has-error count ${errCount} want 2`, hard: true})
+            const resultText = m.texts["#check-result"] || ""
+            out.push({name: "check-result-filled", ok: resultText.length > 0, detail: `#check-result text "${resultText.slice(0, 40)}"`, hard: true})
+            const footer = m.rects["#bottom-area"]
+            const reserved = m.css["body"] && parseInt(m.css["body"]["margin-bottom"], 10)
+            if (footer && reserved !== null && !Number.isNaN(reserved)) {
+                // 固定页脚高于 body 预留区时会盖住最后一个扇区, 属于硬回归
+                out.push({name: "footer-coverage", ok: footer.h <= reserved, detail: `#bottom-area h ${footer.h} vs body margin-bottom ${reserved}px`, hard: true})
+            }
+            return out
+        },
     },
     {
         name: "dumpComparator", file: "dumpComparator.html", sizes: [[380, 720, "std"]],
@@ -263,6 +297,18 @@ const PAGES = [
         },
     },
     {
+        name: "mergeNonces", file: "mergeNonces.html", sizes: [[420, 460, "std"]],
+        inject: injectMergeNonces,
+        framePessimistic: "win32-only",
+        rects: ["#merge-hint", ".final-button button", "#picked-files"],
+        counts: [".nonce-item"],
+        checks(ctx) {
+            // 注入 3 个素材文件, 必须渲染成 3 行
+            const items = (ctx.m.counts && ctx.m.counts[".nonce-item"]) || 0
+            return [{name: "nonce-list-count", ok: items === 3, detail: `.nonce-item count ${items} want 3`, hard: true}]
+        },
+    },
+    {
         name: "about", file: "about.html", sizes: [[600, 480, "std"]],
     },
 ]
@@ -270,7 +316,7 @@ const PAGES = [
 // 页面内几何采集: payload 直接内嵌进代码字符串
 // (Electron 44 沙箱渲染进程下 executeJavaScript(code, args) 的参数通道会抛 clone 错误)
 const collectCode = (page) => `((payload) => {
-    const rects = payload.rects, lists = payload.lists, css = payload.css
+    const rects = payload.rects, lists = payload.lists, css = payload.css, texts = payload.texts, counts = payload.counts
     const root = document.documentElement
     const round = (n) => Math.round(n * 100) / 100
     const rectOf = (el) => {
@@ -278,9 +324,11 @@ const collectCode = (page) => `((payload) => {
         const b = el.getBoundingClientRect()
         return {top: round(b.top), bottom: round(b.bottom), left: round(b.left), right: round(b.right), w: round(b.width), h: round(b.height)}
     }
-    const out = {rects: {}, lists: {}, css: {}}
+    const out = {rects: {}, lists: {}, css: {}, texts: {}, counts: {}}
     for (const sel of rects) out.rects[sel] = rectOf(document.querySelector(sel))
     for (const sel of lists) out.lists[sel] = Array.from(document.querySelectorAll(sel)).map(rectOf)
+    for (const sel of texts) out.texts[sel] = document.querySelector(sel) ? document.querySelector(sel).innerText : null
+    for (const sel of counts) out.counts[sel] = document.querySelectorAll(sel).length
     let contentBottom = 0
     for (const el of document.querySelectorAll("body *")) {
         const b = el.getBoundingClientRect()
@@ -299,9 +347,9 @@ const collectCode = (page) => `((payload) => {
         scrollH: root.scrollHeight, clientH: root.clientHeight, scrollW: root.scrollWidth, clientW: root.clientWidth,
         placeholder: document.body.innerText.includes("{{") || document.title.includes("{{"),
         contentBottom: round(contentBottom),
-        rects: out.rects, lists: out.lists, css: out.css,
+        rects: out.rects, lists: out.lists, css: out.css, texts: out.texts, counts: out.counts,
     }
-})(${JSON.stringify({rects: page.rects || [], lists: page.lists || [], css: page.css || []})})`
+})(${JSON.stringify({rects: page.rects || [], lists: page.lists || [], css: page.css || [], texts: page.texts || [], counts: page.counts || []})})`
 
 const commonChecks = (page, m, ctx) => {
     const out = []
@@ -367,6 +415,7 @@ async function runPage(page, w, h, tag) {
         await delay(300)
         if (page.inject) page.inject(win.webContents)
         await delay(page.stagger || 600)
+        if (page.act) await raceTimeout(win.webContents.executeJavaScript(page.act), 5000, `${label} act`)
         const m = await raceTimeout(win.webContents.executeJavaScript(collectCode(page)), 10000, label)
         const ctx = {winH: h, tag, page, m}
         const results = []

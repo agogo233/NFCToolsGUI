@@ -29,6 +29,7 @@
             <div class="dropdown-menus">
                 <ul class="dropdown-menu">
                     <li class="menu-item" onclick="mainProcess.execAction('open-history-keys')"><span class="text">{{ html_edit_history_key }}</span></li>
+                    <li class="menu-item" onclick="mainProcess.execAction('open-merge-nonces-window')"><span class="text">{{ html_merge_nonces }}</span></li>
                     <li class="menu-item" onclick="mainProcess.execAction('dump-history')"><span class="text">{{ html_dump_history }}</span></li>
                     <li class="menu-item" onclick="mainProcess.execAction('open-dump-editor')"><span class="text">{{ html_dump_editor }}</span></li>
                     <li class="menu-item" onclick="mainProcess.execAction('open-dump-comparator')"><span class="text">{{ html_dump_comparator }}</span></li>
@@ -76,6 +77,7 @@
     <div class="button-column">
         <div class="column-title">{{ html_crack_area }}</div>
         <button class="main-button" title="{{ html_tip_hard_nested }}" onclick="mainProcess.execAction('hard-nested')">{{ html_hard_nested }}</button>
+        <button class="main-button" id="dec-full-card" title="{{ html_tip_dec_full_card }}" style="display:none" onclick="mainProcess.execAction('dec-full-card')">{{ html_dec_full_card }}</button>
         <button class="main-button" title="{{ html_tip_dict_test }}" onclick="mainProcess.execAction('dict-test')">{{ html_test_dictionary }}</button>
     </div>
     <div class="button-column">

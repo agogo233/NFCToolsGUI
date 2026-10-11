@@ -60,6 +60,13 @@ fn hex12_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"[0-9A-Fa-f]{12}").unwrap())
 }
 
+// mfcuk 的全加密求解输出: "INFO: block N recovered KEY: <12hex>" (source/mfcuk/src/mfcuk.c:647)。
+// 该行只给块号不给键位, 但密钥值本身是全局的, 存进密钥字典即可, 无需归属到扇区。
+fn recovered_key_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"recovered KEY: ([0-9a-fA-F]{12})").unwrap())
+}
+
 fn sector_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\(sector (\d{1,2})\)").unwrap())
@@ -115,6 +122,7 @@ struct Paths {
     keys: PathBuf,
     temp_mfd: PathBuf,
     nonces: PathBuf,
+    nonce_dir: PathBuf,
     dump_files: PathBuf,
 }
 
@@ -140,6 +148,7 @@ fn paths(app: &AppHandle) -> Paths {
         keys: dir.join("keys.txt"),
         temp_mfd: dir.join("temp.mfd"),
         nonces: dir.join("nonces.bin"),
+        nonce_dir: dir.join("nonces"),
         dump_files: dir.join("dumpfiles"),
     }
 }
@@ -563,12 +572,17 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
         now_stamp()
     );
     let default_target = p.dump_files.join(&name);
-    let chosen = rfd::FileDialog::new()
-        .set_title(t(state, "dialog_title_save_to"))
-        .set_directory(&p.dump_files)
-        .set_file_name(default_target.file_name().unwrap_or_default().to_string_lossy().into_owned())
-        .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
-        .save_file();
+    // 静默保存开启时不弹对话框, 直接落到默认路径
+    let chosen = if state.lock().unwrap().silent_save_dump {
+        None
+    } else {
+        rfd::FileDialog::new()
+            .set_title(t(state, "dialog_title_save_to"))
+            .set_directory(&p.dump_files)
+            .set_file_name(default_target.file_name().unwrap_or_default().to_string_lossy().into_owned())
+            .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
+            .save_file()
+    };
     let user_chosen = chosen.is_some();
     let target = chosen.unwrap_or(default_target);
     match std::fs::rename(&temp, &target) {
@@ -680,6 +694,19 @@ fn write_ic(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>
             path
         }
     };
+    // 体检放在危险确认之前: 文件根本不能用时不该先问用户"确定要写入吗"
+    match std::fs::read(&dump) {
+        Ok(bytes) => {
+            if dump_size_warning(&bytes) {
+                show_error(app, state, "dialog_title_error", "dialog_msg_write_bad_size");
+                return;
+            }
+        }
+        Err(err) => {
+            io_fail(app, state, err);
+            return;
+        }
+    }
     if !confirm(
         app,
         state,
@@ -732,6 +759,19 @@ fn write_ic(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>
             exit_success(app, state);
         }
     }
+}
+
+/// 写卡前的最小体检: 只查容量。
+///
+/// 不在这里重复实现访问控制位与 BCC 判定 —— 那些逻辑在渲染层 dumpTools.js 里只有一份,
+/// 且位序必须与 MifareOneTool 逐行一致, 在 Rust 里再抄一遍迟早会跑偏
+/// (见 src/renderer/js/dumpTools.js 顶部注释)。这里只需要挡住"根本不是卡数据"的文件:
+/// nfc-mfclassic 读文件时按卡片块数精确 fread, 尺寸不符会静默截断或直接失败
+/// (source/libnfc/utils/nfc-mfclassic.c:777,796)。
+fn dump_size_warning(bytes: &[u8]) -> bool {
+    // nfc-mfclassic 认可的卡容量; 三个值都是 16 的倍数, 不必再单独校验整除
+    const SIZES: [usize; 3] = [1024, 2048, 4096];
+    !SIZES.contains(&bytes.len())
 }
 
 fn format_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
@@ -817,6 +857,60 @@ fn detect_card_type(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<Task
             .ok();
         }
     }
+}
+
+// 解全加密卡: 跑一次 mfcuk Darkside 求解器, -R -1 攻击全部扇区。
+// 求解是否成功不看退出码 (连接失败才非零, 解不出也返回 0), 只看日志里
+// "recovered KEY: <hex>" 行。解出的密钥写入历史后重跑一次检测, 刷新已知/未知
+// 列表 —— 没通过验证的密钥只是进了字典, 不会被当作已解扇区, 污染可控。
+fn dec_full_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
+    let p = paths(app);
+    // 求解器不存在时 (构建未含 mfcuk) 优雅降级并说明, 而不是把 ENOENT 抛给用户
+    let solver = bin_dir().join(format!("{}.exe", "mfcuk"));
+    if !solver.exists() {
+        show_error(app, state, "dialog_title_error", "dialog_msg_full_enc_no_solver");
+        return;
+    }
+    check_key_file(&p.keys);
+    if !confirm(app, state, "dialog_title_prompt", "dialog_full_enc_expectation") {
+        return;
+    }
+    print_status(app, state, &t(state, "indicator_full_enc"));
+    let msg = t(state, "log_msg_full_enc_start");
+    let args = vec![
+        "-C".to_string(),
+        "-v".to_string(),
+        "2".to_string(),
+        "-R".to_string(),
+        "-1".to_string(),
+    ];
+    let mut recovered: Vec<String> = Vec::new();
+    let _outcome = run_task(
+        app,
+        state,
+        tasks,
+        "mfcuk",
+        &args,
+        &msg,
+        &mut |line| {
+            for cap in recovered_key_re().captures_iter(line) {
+                let key = cap[1].to_ascii_lowercase();
+                if !recovered.contains(&key) {
+                    recovered.push(key);
+                }
+            }
+        },
+        &mut |_| {},
+    );
+    // 无论任务成功、失败还是被用户停止, 已解析到的密钥都尽量保存
+    if recovered.is_empty() {
+        print_log(app, &format!("\n{}\n", t(state, "log_msg_full_enc_nokey")));
+        exit_success(app, state);
+        return;
+    }
+    save_keys(app, state, &recovered);
+    print_log(app, &format!("\n{}\n", t(state, "log_msg_full_enc_keys")));
+    detect_card_type(app, state, tasks);
 }
 
 fn write_ufuid_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
@@ -1244,6 +1338,247 @@ fn hard_config_from(value: &Value) -> Option<HardConfig> {
     })
 }
 
+/// 素材文件的头部长度。libnfc-collect 写 6 字节 (source/libnfc_collect/libnfc-collect.c:699),
+/// cropto1_bs 读作 cuid(4)+目标块(1)+键位(1) (source/cropto1_bs/cmdhfmfhard.c:1039-1047)。
+///
+/// **这 6 字节里只有前 4 字节可信。** abtUid 声明为 10 字节
+/// (source/libnfc/include/nfc/nfc-types.h:190), 而 MIFARE Classic 只填前 4 字节
+/// (source/libnfc/libnfc/chips/pn53x.c:526), 且 pn53x_current_target_keep 用的是
+/// 未清零的 malloc (同文件 :3768) —— 第 5、6 字节是堆上的残留, 两次采集可能不同也可能相同。
+///
+/// 因此**归属判定一律以文件名为准**, 头部只用来避免往不匹配的素材后面追加。
+/// cropto1_bs 从头部读到的目标块/键位同样不可信, 这属于 vendored fork 的既有缺陷。
+const NONCE_HEADER_LEN: usize = 6;
+
+/// 素材归属标识: `{uid}_{sector}{keytype}`。由 collect_only 分支生成, 是本程序自己的命名,
+/// 不受工具输出格式影响。
+fn nonce_identity(name: &str) -> Option<String> {
+    let stem = Path::new(name).file_stem()?.to_string_lossy().to_string();
+    // 去掉避让用的 _N 后缀, 避免同一目标被拆成 identity 与 identity_1 两个归属
+    let trimmed = {
+        let mut cut = stem.len();
+        while cut > 0 && stem.as_bytes()[cut - 1].is_ascii_digit() {
+            cut -= 1;
+        }
+        // 只剥 "_" 之后的数字段, 纯数字文件名不动
+        if cut < stem.len() && cut > 0 && stem.as_bytes()[cut - 1] == b'_' {
+            &stem[..cut - 1]
+        } else {
+            stem.as_str()
+        }
+    };
+    // 必须以 _{数字}{A|B} 结尾
+    let (uid, tail) = trimmed.rsplit_once('_')?;
+    if uid.is_empty() || tail.len() < 2 {
+        return None;
+    }
+    let (sector, key_type) = tail.split_at(tail.len() - 1);
+    if sector.is_empty() || !sector.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if !matches!(key_type, "A" | "B" | "a" | "b") {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+fn nonce_header_matches(data: &[u8], head: &[u8]) -> bool {
+    data.len() >= NONCE_HEADER_LEN && &data[..NONCE_HEADER_LEN] == head
+}
+
+/// 采集结果归档: 同一目标的第二次采集接到已有素材之后。
+/// 目标已存在但归属不同 (换卡 / 换扇区) 时另起带序号的文件名, 绝不覆盖已有素材。
+fn archive_nonces(source: &Path, target: &Path) -> std::io::Result<PathBuf> {
+    let data = std::fs::read(source)?;
+    let identity = nonce_identity(&target.to_string_lossy());
+    let mut final_target = target.to_path_buf();
+    // 同名文件已存在: 归属相同 (identity 可解析) 且头部一致才允许追加,
+    // 否则换卡/换扇区撞了同名, 必须另起文件名
+    if std::fs::read(&final_target)
+        .map(|old| {
+            let same_identity = identity.is_some();
+            !same_identity || !nonce_header_matches(&old, &data[..NONCE_HEADER_LEN.min(data.len())])
+        })
+        .unwrap_or(false)
+    {
+        let stem = target
+            .file_stem()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| "nonces".into());
+        let mut index = 1;
+        loop {
+            let candidate = target.with_file_name(format!("{stem}_{index}.bin"));
+            // 已存在的候选一律视为占用: 它的头部可能与本次不同 (同目标多次采集的头部
+            // 本就不可信, 见 NONCE_HEADER_LEN 注释), 往上面追加会混入异头素材。
+            // 只用一个尚不存在的名字, 新文件从头写起。
+            if !candidate.exists() {
+                final_target = candidate;
+                break;
+            }
+            index += 1;
+            if index > 999 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "too many nonce files with the same identity",
+                ));
+            }
+        }
+    }
+    append_nonces(&data, &final_target)?;
+    std::fs::remove_file(source).ok();
+    Ok(final_target)
+}
+
+/// 把一份素材接到已有素材之后。目标不存在时直接写入。
+/// 头部不一致一律拒绝 —— 把不同卡或不同扇区的素材拼在一起会算出错误的密钥。
+fn append_nonces(data: &[u8], target: &Path) -> std::io::Result<()> {
+    if data.len() < NONCE_HEADER_LEN {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "nonce file is too short",
+        ));
+    }
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(target)?;
+    if file.metadata()?.len() == 0 {
+        // 目标为空时连头一起写
+        file.write_all(&data[..NONCE_HEADER_LEN])?;
+    }
+    file.write_all(&data[NONCE_HEADER_LEN..])?;
+    Ok(())
+}
+
+// 多选素材文件。只回传文件名, merge_nonces 再按 nonce_dir 解析 —— 用户浏览到归档目录
+// 之外的文件时读不到, 因此对话框限定在 nonce_dir 内。
+fn pick_nonce_files(app: &AppHandle, state: &Mutex<AppState>) {
+    let p = paths(app);
+    let _ = std::fs::create_dir_all(&p.nonce_dir);
+    let mut dialog = rfd::FileDialog::new()
+        .set_title(t(state, "html_nonce_merge_pick"))
+        .set_directory(&p.nonce_dir)
+        .add_filter(t(state, "file_type_bin"), &["bin"]);
+    // 子窗口不挂父窗口时, Windows 上对话框可能被推到后台, 用户看不见也点不到
+    if let Some(win) = app.get_webview_window("mergeNonces") {
+        dialog = dialog.set_parent(&win);
+    }
+    let files = dialog.pick_files();
+    let Some(files) = files else {
+        return;
+    };
+    let names: Vec<String> = files
+        .iter()
+        .filter_map(|path| path.file_name().map(|name| name.to_string_lossy().to_string()))
+        .filter(|name| !name.is_empty())
+        .collect();
+    app.emit_to("mergeNonces", "update-nonce-files", &names).ok();
+}
+
+fn merge_nonces(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, arg: &Value) {
+    let p = paths(app);
+    let _ = std::fs::create_dir_all(&p.nonce_dir);
+    let files: Vec<String> = serde_json::from_value(arg.clone()).unwrap_or_default();
+    if files.len() < 2 {
+        show_error(app, state, "dialog_title_error", "dialog_msg_nonce_need_two");
+        return;
+    }
+
+    // 归属以文件名为准: 头 6 字节里只有 UID 可信 (见 NONCE_HEADER_LEN 的注释)。
+    // 只选同一归属的文件合并 —— 不同卡或不同扇区的素材拼在一起会算出错误的密钥。
+    let Some(identity) = nonce_identity(&files[0]) else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_nonce_bad_name");
+        return;
+    };
+    if files
+        .iter()
+        .any(|name| nonce_identity(name).as_deref() != Some(identity.as_str()))
+    {
+        show_error(app, state, "dialog_title_error", "dialog_msg_nonce_header_mismatch");
+        return;
+    }
+
+    let mut sources: Vec<Vec<u8>> = Vec::new();
+    for name in &files {
+        let path = PathBuf::from(name);
+        let path = if path.is_absolute() { path } else { p.nonce_dir.join(path) };
+        match std::fs::read(&path) {
+            Ok(data) => sources.push(data),
+            Err(err) => {
+                io_fail(app, state, err);
+                return;
+            }
+        }
+    }
+    // 头部只用于保证追加的素材格式一致, 不参与归属判定
+    let head = sources[0].get(..NONCE_HEADER_LEN).map(|h| h.to_vec());
+    if head.is_none()
+        || sources
+            .iter()
+            .any(|data| !nonce_header_matches(data, head.as_deref().unwrap_or_default()))
+    {
+        show_error(app, state, "dialog_title_error", "dialog_msg_nonce_header_mismatch");
+        return;
+    }
+
+    // 先写第一份的头, 之后每份只追加素材部分 —— 头部重复写入会让计算端读错块号与键位。
+    // 合并到临时文件再改名: 中途失败时不会把 nonces.bin 截成半截素材。
+    let staging = p.nonce_dir.join(format!("merged_{}.bin", now_stamp()));
+    if let Err(err) = std::fs::write(&staging, &sources[0][..NONCE_HEADER_LEN]) {
+        io_fail(app, state, err);
+        return;
+    }
+    for data in sources.iter().skip(1) {
+        if let Err(err) = append_nonces(data, &staging) {
+            std::fs::remove_file(&staging).ok();
+            io_fail(app, state, err);
+            return;
+        }
+    }
+    let target = p.nonces.clone();
+    if let Err(err) = std::fs::rename(&staging, &target) {
+        std::fs::remove_file(&staging).ok();
+        io_fail(app, state, err);
+        return;
+    }
+
+    print_status(app, state, &t(state, "indicator_merging_nonces"));
+    let crack_msg = t(state, "lod_msg_start_hard_nested");
+    let mut found_key = false;
+    let crack = run_task(
+        app,
+        state,
+        tasks,
+        "cropto1_bs",
+        &[target.to_string_lossy().to_string()],
+        &crack_msg,
+        &mut |line| {
+            if let Some(index) = line.find("Key found:") {
+                let start = index + "Key found:".len();
+                let end = (start + 12).min(line.len());
+                let key = line.get(start..end).unwrap_or("").to_string();
+                if key.len() != 12 || !key.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return;
+                }
+                found_key = true;
+                save_keys(app, state, &[key]);
+            }
+        },
+        &mut |_| {},
+    );
+    if crack != Ok(TaskOutcome::Success) {
+        return;
+    }
+    if found_key {
+        print_log(app, &format!("\n{}\n", t(state, "log_msg_nonce_key_found")));
+        exit_success(app, state);
+    } else {
+        print_log(app, &format!("\n{}\n", t(state, "log_msg_nonce_no_key")));
+        exit_success(app, state);
+    }
+}
+
 fn hard_nested_payload(state: &Mutex<AppState>) -> Option<Value> {
     let s = state.lock().unwrap();
     let known = s.known_key_info.first()?;
@@ -1351,43 +1686,38 @@ fn run_hard_nested_once(
         return AutoStep::Done;
     };
     if cfg.collect_only {
-        let mut rename_failed = false;
         let size = std::fs::metadata(&p.nonces).map(|m| m.len()).unwrap_or(0);
         if size != 0 {
-            let default_name = match (&ctx.uid, &ctx.sector, &ctx.key_type) {
+            // 素材按"卡号_扇区键位"归档, 同一目标的多次采集才会落到同一文件名,
+            // 后续可以直接累加 (见 merge_nonces)。不按此命名时用户随手改名就再也认不出归属。
+            let name = match (&ctx.uid, &ctx.sector, &ctx.key_type) {
                 (Some(uid), Some(sector), Some(key_type)) => {
-                    format!("{uid}_{sector}{key_type}")
+                    format!("{uid}_{sector}{key_type}.bin")
                 }
-                _ => "nonces".to_string(),
+                _ => format!("nonces_{}.bin", now_stamp()),
             };
-            match rfd::FileDialog::new()
-                .set_title(t(state, "dialog_title_save_to"))
-                .set_file_name(&default_name)
-                .add_filter(t(state, "file_type_bin"), &["bin"])
-                .save_file()
-            {
-                Some(target) => match std::fs::rename(&p.nonces, &target) {
-                    Err(_) => {
-                        rename_failed = true;
-                        print_log(app, &t(state, "log_msh_save_failed"));
-                    }
-                    Ok(_) => {
-                        print_log(
-                            app,
-                            &format!(
-                                "\n\n{} {}\n",
-                                t(state, "log_msg_file_already_saved_to"),
-                                target.display()
-                            ),
-                        );
-                    }
-                },
-                None => print_log(app, &t(state, "log_msg_not_saved")),
-            }
+            let _ = std::fs::create_dir_all(&p.nonce_dir);
+            let target = p.nonce_dir.join(&name);
+            // archive_nonces 可能在归属冲突时改用带序号的文件名, 必须用返回值而不是 target,
+            // 否则日志会指向一个不含本次素材的文件
+            let final_target = match archive_nonces(&p.nonces, &target) {
+                Ok(path) => path,
+                Err(err) => {
+                    print_log(app, &format!("\n{} {err}\n", t(state, "log_msh_save_failed")));
+                    log_exit(app, state, 1);
+                    return AutoStep::Done;
+                }
+            };
+            print_log(
+                app,
+                &format!(
+                    "\n\n{} {}\n",
+                    t(state, "log_msg_nonce_archived"),
+                    final_target.display()
+                ),
+            );
         }
-        if rename_failed {
-            log_exit(app, state, 1);
-        } else if outcome == TaskOutcome::Success {
+        if outcome == TaskOutcome::Success {
             exit_success(app, state);
         }
         return AutoStep::Done;
@@ -1781,6 +2111,40 @@ fn dump_editor_save(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     .ok();
 }
 
+// 从转储编辑器导出密钥字典。内容由渲染层的 dumpTools.dumpToKeyDict 生成
+// (与 mfoc -f / nfc-mfdict -d 的密钥文件同格式), 主进程只负责选路径与落盘。
+fn dump_editor_export_keys(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
+    let name = arg.get("name").and_then(|v| v.as_str()).unwrap_or("keys.dic");
+    let content = arg.get("content").and_then(|v| v.as_str()).unwrap_or_default();
+    if content.trim().is_empty() {
+        return;
+    }
+    let mut dialog = rfd::FileDialog::new()
+        .set_title(t(state, "dialog_title_save_to"))
+        .set_file_name(name)
+        .add_filter(t(state, "file_type_dict"), &["dic", "txt"]);
+    // 与 dump_editor_save 同理, 对话框挂到编辑器窗口保证模态显示
+    if let Some(win) = app.get_webview_window("dumpEditor") {
+        dialog = dialog.set_parent(&win);
+    }
+    let Some(path) = dialog.save_file() else {
+        print_log(app, &format!("\n{}\n", t(state, "log_msg_not_saved")));
+        return;
+    };
+    if let Err(err) = std::fs::write(&path, content) {
+        io_fail(app, state, err);
+        return;
+    }
+    print_log(
+        app,
+        &format!(
+            "\n\n{} {}\n",
+            t(state, "log_msg_file_already_saved_to"),
+            path.display()
+        ),
+    );
+}
+
 fn hex_to_bytes(text: &str) -> Vec<u8> {
     let bytes = text.trim().as_bytes();
     let mut out = Vec::with_capacity(bytes.len() / 2 + 1);
@@ -1927,7 +2291,11 @@ fn set_speed(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager
     let Some(speed) = arg.as_u64().map(|value| value as u32) else {
         return;
     };
+    if !matches!(speed, 115200 | 230400 | 460800 | 921600) {
+        return;
+    }
     state.lock().unwrap().current_speed = speed;
+    crate::settings::save(app, state);
     let device = state.lock().unwrap().current_device.clone();
     if let Some(device) = device {
         // 任务运行中跳过重连: 此时 set_nfc_config 会被"设备忙"拒绝并在主窗口提示连接失败
@@ -1937,6 +2305,42 @@ fn set_speed(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager
         // 速度只写进状态不会生效, 必须重写 libnfc.conf 并重连
         set_nfc_config(app, state, tasks, &device);
     }
+}
+
+// 设置窗口的开关类选项。只落盘, 不触发设备重连 —— 主题由渲染层立即生效。
+fn set_setting(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
+    let Some(key) = arg.get("key").and_then(|value| value.as_str()) else {
+        return;
+    };
+    match key {
+        "autoSelectDevice" => {
+            if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
+                state.lock().unwrap().auto_select_device = value;
+            }
+        }
+        "silentSaveDump" => {
+            if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
+                state.lock().unwrap().silent_save_dump = value;
+            }
+        }
+        "fullEncEnabled" => {
+            if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
+                state.lock().unwrap().full_enc_enabled = value;
+            }
+        }
+        "theme" => {
+            if let Some(value) = arg.get("value").and_then(|value| value.as_str()) {
+                if matches!(value, "light" | "dark" | "system") {
+                    state.lock().unwrap().theme = value.to_string();
+                }
+            }
+        }
+        _ => return,
+    }
+    crate::settings::save(app, state);
+    // 主窗口拿到的是建窗那一刻的 __SETTINGS__ 快照, 不推送的话改开关要重启才生效
+    app.emit_to("main", "settings-values", &crate::settings::payload(state))
+        .ok();
 }
 
 fn set_nfc_config(
@@ -2020,11 +2424,19 @@ fn set_nfc_config(
     }
 }
 
+// 扫描结果带出厂商 ID, 由渲染层决定要不要自动连接 (见 index.js)。
+// 判定放在渲染层而不是这里, 是为了让两个端口用同一份规则:
+// 只有恰好一个已知桥接芯片的串口时才自动连, 否则维持手动选择。
 fn scan_usb_devices(app: &AppHandle) {
-    let devices: Vec<String> = serialport::available_ports()
+    let devices: Vec<Value> = serialport::available_ports()
         .into_iter()
         .flatten()
-        .map(|port| port.port_name)
+        .map(|port| {
+            json!({
+                "path": port.port_name,
+                "vendorId": port.vendor_id,
+            })
+        })
         .collect();
     app.emit("update-usb-devices", &devices).ok();
 }
@@ -2067,6 +2479,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "scan-usb-devices" => scan_usb_devices(&app),
         "conn-usb-devices" => conn_usb_devices(&app, &state, &tasks, &arg),
         "set-speed" => set_speed(&app, &state, &tasks, &arg),
+        "set-setting" => set_setting(&app, &state, &arg),
         "read-IC" => read_ic(&app, &state, &tasks),
         "write-IC" => write_ic(&app, &state, &tasks, &arg),
         "format-card" => format_card(&app, &state, &tasks),
@@ -2075,6 +2488,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         }
         "done-input-keys-read-IC" => done_input_keys_read_ic(&app, &state, &tasks, &arg),
         "detect-card-type" => detect_card_type(&app, &state, &tasks),
+        "dec-full-card" => dec_full_card(&app, &state, &tasks),
         "write-ufuid-uid" => write_ufuid_uid(&app, &state, &tasks),
         "input-uid-write" => {
             windows::create_uid_input_window(&app, &state).ok();
@@ -2098,9 +2512,13 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "dict-test" => dict_test(&app, &state),
         "dict-test-config-done" => dict_test_config_done(&app, &state, &tasks, &arg),
         "open-history-keys" => open_history_keys(&app),
+        "merge-nonces" => merge_nonces(&app, &state, &tasks, &arg),
+        "open-merge-nonces-window" => windows::create_merge_nonces_window(&app, &state).ok(),
+        "pick-nonce-files" => pick_nonce_files(&app, &state),
         "open-dump-editor" => open_dump_editor(&app, &state, &arg),
         "dump-editor-choose-file" => dump_editor_choose_file(&app, &state, &arg),
         "dump-editor-save" => dump_editor_save(&app, &state, &arg),
+        "dump-editor-export-keys" => dump_editor_export_keys(&app, &state, &arg),
         "open-dump-comparator" => open_dump_comparator(&app, &state, &arg),
         "dump-comparator-choose-file" => {
             let dump_type = arg.get("type").and_then(|v| v.as_str()).unwrap_or("A");

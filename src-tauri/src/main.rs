@@ -2,6 +2,7 @@
 
 mod commands;
 mod i18n;
+mod settings;
 mod state;
 mod task;
 mod windows;
@@ -30,6 +31,7 @@ fn main() {
                 guard.dict_path = commands::dict_path();
             }
             commands::data_dir(&handle);
+            settings::load(&handle, state);
             windows::create_main_window(&handle, state)?;
             Ok(())
         })

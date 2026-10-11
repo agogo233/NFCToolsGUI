@@ -572,9 +572,10 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
         now_stamp()
     );
     let default_target = p.dump_files.join(&name);
-    // 静默保存开启时不弹对话框, 直接落到默认路径
-    let chosen = if state.lock().unwrap().silent_save_dump {
-        None
+    // 静默保存开启时不弹对话框, 直接落到默认路径; 弹窗被取消同样是 None, 但那时只提示未保存
+    let silent = state.lock().unwrap().silent_save_dump;
+    let target = if silent {
+        Some(default_target.clone())
     } else {
         rfd::FileDialog::new()
             .set_title(t(state, "dialog_title_save_to"))
@@ -583,20 +584,22 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
             .add_filter(t(state, "file_type_dump"), &["dump", "mfd"])
             .save_file()
     };
-    let user_chosen = chosen.is_some();
-    let target = chosen.unwrap_or(default_target);
+    let Some(target) = target else {
+        print_log(app, &t(state, "log_msg_not_saved"));
+        return;
+    };
     match std::fs::rename(&temp, &target) {
         Err(_) => {
             print_log(app, &format!("\n\n{}\n", t(state, "log_msh_save_failed")));
             log_exit(app, state, 1);
         }
         Ok(_) => {
-            if user_chosen {
+            if silent {
                 print_log(
                     app,
                     &format!(
                         "\n\n{} {}\n",
-                        t(state, "log_msg_file_already_saved_to"),
+                        t(state, "log_msg_dump_auto_saved"),
                         target.display()
                     ),
                 );
@@ -605,7 +608,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
                     app,
                     &format!(
                         "\n\n{} {}\n",
-                        t(state, "log_msg_dump_auto_saved"),
+                        t(state, "log_msg_file_already_saved_to"),
                         target.display()
                     ),
                 );

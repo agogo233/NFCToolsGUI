@@ -839,6 +839,9 @@ function updateDumpFiles() {
 }
 
 function execAction(action, arg) {
+    // 渲染层在 main 与 tauri 两个分支间是同一份文件, 但部分动作只在 tauri 分支实现。
+    // 未实现的动作直接忽略, 否则 TypeError 会经 ipcMain 冒泡成未捕获异常, 连带终止主进程。
+    if (!actions[action]) return
     actions[action](arg)
 }
 module.exports = {execAction}

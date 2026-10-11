@@ -16,7 +16,9 @@
 
 body {
     margin-top: 0;
-    margin-bottom: 120px;
+    /* 底部是固定页脚, 预留高度必须不小于页脚实际高度, 否则最后一个扇区会被盖住。
+       页脚含两行按钮与一行体检结果, 实测 166px, 这里留 180px 余量。 */
+    margin-bottom: 180px;
 }
 
 .binary-input {
@@ -70,6 +72,35 @@ body {
     vertical-align: middle;
     box-shadow: none;
     background-color: var(--color-surface-2);
+}
+
+.binary-input.has-error {
+    border-color: #e96666;
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(223,102,102,.6);
+}
+
+#check-result {
+    margin: 0 10px;
+    color: var(--color-disabled-fg);
+    word-break: break-word;
+    /* 固定页脚不能被结果行数撑高, 否则会盖住最后一个扇区。超出后滚动。 */
+    max-height: 46px;
+    overflow-y: auto;
+}
+
+/* 空结果不占位, 页脚高度随之下降 */
+#check-result:empty {
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+}
+
+#check-result.has-error {
+    color: #e96666;
+}
+
+#check-result .check-line {
+    display: block;
 }
 
 #file-info {

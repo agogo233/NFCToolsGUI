@@ -888,7 +888,7 @@ fn dec_full_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMan
         "-1".to_string(),
     ];
     let mut recovered: Vec<String> = Vec::new();
-    let _outcome = run_task(
+    let outcome = run_task(
         app,
         state,
         tasks,
@@ -905,6 +905,20 @@ fn dec_full_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMan
         },
         &mut |_| {},
     );
+    // 设备没连或设备正忙: run_task 已经弹过错, 这里直接返回, 不再走下面的
+    // "未解出密钥" + exit_success, 否则会把错误状态覆盖成"运行完成"。
+    // 但要自己补一次 error 状态: run_task 的这两个前置分支只弹窗不复位指示灯
+    // (只有 spawn 失败才调 log_exit), 而上面 print_status 已把指示灯置成 running,
+    // 不补的话绿灯会常亮、走秒计时器一直不停。
+    // mfcuk 自身失败 (Failed) 不在此列 —— 它的退出码不可靠 (解不出也返回 0), 只能看日志。
+    if outcome.is_err() {
+        app.emit(
+            "update-status",
+            json!({ "text": t(state, "indicator_error"), "indicator": "error" }),
+        )
+        .ok();
+        return;
+    }
     // 无论任务成功、失败还是被用户停止, 已解析到的密钥都尽量保存
     if recovered.is_empty() {
         print_log(app, &format!("\n{}\n", t(state, "log_msg_full_enc_nokey")));

@@ -4,6 +4,7 @@
 const {
     checkDump, fixDump, dumpToKeyDict, hexToBytes, bytesToHex,
     sectorTrailerBlock, sectorGroupIndex, sectorCount,
+    groupSector, groupHasTrailer, groupLabel,
     BLOCK_SIZE, FIX_ACCESS_BYTES
 } = require("../../src/renderer/js/dumpTools")
 
@@ -263,6 +264,62 @@ console.log("[parse] 11. 4K 卡 32 号以后的尾块定位")
     // 编辑器按每 4 行一组渲染, 标红要落在尾块所在的那一组: 块 143 属于第 35 组
     eq("1K 扇区 3 标红组等于扇区号", sectorGroupIndex(3, 1024), 3)
     eq("4K 扇区 32 标红落在尾块所在组", sectorGroupIndex(32, SIZE), 35)
+}
+
+console.log("[parse] 12. 编辑器分组与真实扇区的对应")
+{
+    // 编辑器固定每 4 块一组。4K 的 32 号以后一扇区占 16 块 = 4 组, 组边界与扇区边界
+    // 对齐, 所以能只靠组下标换算出真实扇区, 不必改渲染布局。
+    // 1K/2K 每扇区恰好一组 —— 标签必须与旧的顺序计数器完全一致, 任何变化都是回归。
+    eq("1K 每组都含尾块",
+        [0, 3, 15].map((g) => groupHasTrailer(g, 1024)), [true, true, true])
+    eq("2K 每组都含尾块",
+        [0, 17, 31].map((g) => groupHasTrailer(g, 2048)), [true, true, true])
+    eq("1K 标签就是扇区号",
+        [0, 3, 15].map((g) => groupLabel(g, 1024)), ["0", "3", "15"])
+    eq("2K 标签就是扇区号",
+        [0, 17, 31].map((g) => groupLabel(g, 2048)), ["0", "17", "31"])
+    eq("1K 组号即扇区号", [0, 3, 15].map((g) => groupSector(g, 1024)), [0, 3, 15])
+    eq("2K 组号即扇区号", [0, 17, 31].map((g) => groupSector(g, 2048)), [0, 17, 31])
+
+    // 4K 前 32 组仍是一组一扇区, 与 1K 行为相同
+    eq("4K 前 32 组标签就是扇区号",
+        [0, 17, 31].map((g) => groupLabel(g, 4096)), ["0", "17", "31"])
+    eq("4K 前 32 组每组都含尾块",
+        [0, 17, 31].map((g) => groupHasTrailer(g, 4096)), [true, true, true])
+
+    // 4K 后 32 组: 每 4 组一个扇区。扇区 32 的尾块是块 143, 落在第 35 组,
+    // 所以标签必须是 "32 (4/4)" —— 早先直接用组序号会标成 "扇区 35", 与体检结果
+    // 报的 "扇区 32" 对不上。
+    eq("4K 扇区 32 占组 32..35 且标签带部分号",
+        [32, 33, 34, 35].map((g) => groupLabel(g, 4096)),
+        ["32 (1/4)", "32 (2/4)", "32 (3/4)", "32 (4/4)"])
+    eq("4K 这 4 组都归属扇区 32",
+        [32, 33, 34, 35].map((g) => groupSector(g, 4096)), [32, 32, 32, 32])
+    // 只有最后一组是真尾块, 前三组的第 4 行是普通数据块
+    eq("4K 扇区 32 的四组中只有最后一组含尾块",
+        [32, 33, 34, 35].map((g) => groupHasTrailer(g, 4096)),
+        [false, false, false, true])
+    eq("4K 扇区 39 尾块落在最后一组",
+        [60, 61, 62, 63].map((g) => groupLabel(g, 4096)),
+        ["39 (1/4)", "39 (2/4)", "39 (3/4)", "39 (4/4)"])
+    eq("4K 全部 64 组里含尾块的恰为 9 个大扇区尾块 + 前 32 组",
+        Array.from({length: 64}, (_, g) => groupHasTrailer(g, 4096))
+            .map((has, g) => (has ? g : -1)).filter((g) => g >= 0),
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+            16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+            35, 39, 43, 47, 51, 55, 59, 63])
+
+    // 容量既非 1K/2K/4K 时 (文件被截断或本就不是 Classic 布局) 不能换算扇区,
+    // 必须退回组序号。早先按"组数*16"取容量时, 1000 字节会被凑成 63 组 -> 1008 ->
+    // 落进 4K 区间, 于是一张坏卡被标成 "扇区 39 (3/4)"。
+    eq("非合法容量退回组序号(1000 字节)",
+        [0, 31, 32, 62].map((g) => groupLabel(g, 1000)), ["0", "31", "32", "62"])
+    eq("非合法容量不再谎称尾块所在",
+        [32, 34, 35].map((g) => groupHasTrailer(g, 1000)), [true, true, true])
+    eq("超过 4K 的输入退回组序号",
+        [0, 32, 63].map((g) => groupLabel(g, 8192)), ["0", "32", "63"])
+    eq("0 字节不抛异常", groupLabel(0, 0), "0")
 }
 
 console.log(failed === 0 ? "[parse-dump] PASSED" : `[parse-dump] FAILED (${failed})`)

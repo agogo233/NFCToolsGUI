@@ -44,6 +44,40 @@ function sectorCount(blockCount) {
     return 32 + (blockCount - 128) / 16
 }
 
+// 编辑器渲染单元 (每 4 块一组) -> 该组首块所属的真实扇区。
+// 编辑器固定按 4 块一组切分, 4K 的大扇区正好 16 块 = 4 组, 所以组边界与扇区边界
+// 天然对齐, 只靠组下标就能算出真实扇区, 不必改渲染布局。
+// 容量不是 1K/2K/4K 时 (文件被截断或本来就不是 Classic 布局) 无从换算,
+// 一律退回组序号, 宁可标签没有意义也不能给出看似可信的扇区号。
+function groupSector(groupIndex, blockSize) {
+    const blockCount = blockSize / BLOCK_SIZE
+    if (blockCount <= 128) return groupIndex
+    if (blockCount > 256) return groupIndex
+    if (groupIndex < 32) return groupIndex
+    return 32 + Math.floor((groupIndex - 32) / 4)
+}
+
+// 该组的第 4 行是不是真的扇区尾块。1K/2K 每扇区恰好一组, 恒为真; 4K 的大扇区跨 4 组,
+// 只有最后一组 (32 号起的 35/39/43/...) 才是尾块, 其余组的第 4 行是普通数据块,
+// 早先被无差别地渲染成密钥色, 会让人把数据块当成密钥去改。
+function groupHasTrailer(groupIndex, blockSize) {
+    const blockCount = blockSize / BLOCK_SIZE
+    if (blockCount > 128 && blockCount <= 256) {
+        const sector = groupSector(groupIndex, blockSize)
+        return groupIndex * 4 + 3 === sectorTrailerBlock(sector, blockCount)
+    }
+    return true
+}
+
+// 组标签: 1K/2K 与 4K 的前 32 组就是扇区号, 4K 大扇区的四个部分标出 (n/4),
+// 让标签能对回真实扇区, 而不是编辑器里第几组。
+function groupLabel(groupIndex, blockSize) {
+    if (blockSize / BLOCK_SIZE <= 128 || blockSize / BLOCK_SIZE > 256 || groupIndex < 32) {
+        return String(groupIndex)
+    }
+    return `${groupSector(groupIndex, blockSize)} (${groupIndex % 4 + 1}/4)`
+}
+
 function readAccessBits(ac) {
     const out = [0, 0, 0, 0]
     out[0] = ((ac[2] & 0x10) >> 4) + ((ac[2] & 0x01) << 1) + ((ac[1] & 0x10) >> 2)
@@ -210,6 +244,7 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         checkDump, fixDump, dumpToKeyDict, hexToBytes, bytesToHex,
         sectorGroupIndex, sectorFirstBlock, sectorTrailerBlock, sectorCount,
+        groupSector, groupHasTrailer, groupLabel,
         BLOCK_SIZE, VALID_SIZES, FIX_ACCESS_BYTES
     }
 }

@@ -86,13 +86,17 @@ function applyHexData(hex) {
 }
 
 // 按每 4 行一组重建编辑区。打开文件与修复后回填走同一条路径。
+// 标签用 groupLabel 换算成真实扇区 (4K 卡 32 号以后一扇区占 4 组, 直接用组序号
+// 会把尾块那组标成 "扇区 35", 与体检结果里报的 "扇区 32" 对不上)。
+// blockSize 取各组实际字节数之和, 不能用 组数 * 16: 文件长度不是 16 的倍数时
+// 那样会向上凑到最近的合法容量, 把一张损坏的文件标成 "扇区 39 (3/4)"。
 function renderSectors(sectors) {
     const container = $('#binary-data-content')
     container.empty()
-    let sector = 0
+    const blockSize = sectors.reduce((sum, lines) => sum + lines.replace(/\s+/g, "").length / 2, 0)
     sectors.forEach((lines, i) => {
-        const label = $(`<span class="textarea-label">${i18n("html_sector")} ${sector++}</span>`)
-        const textarea = $(`<div class="binary-input" wrap="off" spellcheck="false" contenteditable="true">${updateTagColor(lines, !i)}</div>`)
+        const label = $(`<span class="textarea-label">${i18n("html_sector")} ${groupLabel(i, blockSize)}</span>`)
+        const textarea = $(`<div class="binary-input" wrap="off" spellcheck="false" contenteditable="true">${updateTagColor(lines, !i, groupHasTrailer(i, blockSize))}</div>`)
         container.append($('<br>'))
         container.append(label)
         container.append(textarea)
@@ -149,8 +153,10 @@ $('#save-as-file').click(() => {
 })
 $('#update-tag-color').click(() => {
     if (checkData()) {
-        $('#binary-data-content').find('.binary-input').each((i, item) => {
-            item.innerHTML = updateTagColor(item.innerText, !i)
+        const groups = $('#binary-data-content').find('.binary-input')
+        const blockSize = groups.toArray().reduce((sum, el) => sum + el.innerText.replace(/\s+/g, "").length / 2, 0)
+        groups.each((i, item) => {
+            item.innerHTML = updateTagColor(item.innerText, !i, groupHasTrailer(i, blockSize))
         })
     } else {
         alert(hasNonClassicLayout() ? i18n("html_data_not_classic_layout") : i18n("html_data_format_wrong"))
@@ -174,11 +180,14 @@ window['electronAPI'].onSavedDumpFile((event, data) => {
     alert(i18n("html_save_success"))
 })
 
-function updateTagColor(data, isBlock0 = false) {
+// 第 4 行按密钥行着色。hasTrailer 为 false 时该行是普通数据块 (4K 卡 32 号以后
+// 只有最后一组才是尾块), 着色成密钥色会让人照着改错块。
+function updateTagColor(data, isBlock0 = false, hasTrailer = true) {
     const splitData = data.split("\n")
     // 少于 4 行的分组不是 Mifare Classic 扇区布局 (如 Ultralight), 没有第 4 行可着色
     if (splitData.length < 4) return data
     if (isBlock0) {splitData[0] = `<span class="uid">${splitData[0]}</span>`}
+    if (!hasTrailer) return splitData.join("\n")
     splitData[3] = `<span class="keyA">${splitData[3].substring(0, 12)}</span>` +
         `<span class="accessControl">${splitData[3].substring(12, 18)}</span>` +
         `${splitData[3].substring(18, 20)}` +

@@ -15,17 +15,28 @@ const VALID_SIZES = [1024, 2048, 4096]
 // 不参与访问位判定 (已验证: 改 b9 不影响校验结果), 保留原值 —— 体检是修复, 不是格式化。
 const FIX_ACCESS_BYTES = [0xff, 0x07, 0x80]
 
-// 扇区尾块(密钥/访问控制所在块)在小卡与大卡上的间隔不同
+// 扇区首块(块 0, 即 UID/数据块所在处)的块号。
 // 见 source/libnfc/utils/nfc-mfclassic.c:158-176
 function sectorFirstBlock(sector, blockCount) {
     if (blockCount <= 128) return sector * 4
     return sector < 32 ? sector * 4 : 128 + (sector - 32) * 16
 }
 
+// 扇区尾块(密钥/访问控制所在块)的块号。4K 卡的 32 号以后每扇区 16 块, 尾块在
+// first+15 而不是 first+3 —— 用 "首块+3" 去定位会落到数据块上, 体检误报、
+// 修复会把数据块的字节 6..8 覆盖成默认访问位。参数是块数, 不是字节数。
+function sectorTrailerBlock(sector, blockCount) {
+    const first = sectorFirstBlock(sector, blockCount)
+    if (blockCount <= 128) return first + 3
+    return sector < 32 ? first + 3 : first + 15
+}
+
 // 扇区序号 -> 编辑器里的分组下标。编辑器固定按每 4 行分一组, 与实际扇区大小无关,
 // 所以大卡上两者并不一一对应 (4K 卡的 32 号以后每扇区 16 块, 分组下标要靠这个换算)。
+// 要指向尾块所在的那一组 (密钥/访问位错在那一组), 而不是首块所在的那一组。
+// 这里必须做整除: 调用方拿返回值直接当下标用, 带小数会被下层隐式取整, 行为依赖实现细节。
 function sectorGroupIndex(sector, blockSize) {
-    return sectorFirstBlock(sector, blockSize / BLOCK_SIZE) / 4
+    return Math.floor(sectorTrailerBlock(sector, blockSize / BLOCK_SIZE) / 4)
 }
 
 function sectorCount(blockCount) {
@@ -92,10 +103,11 @@ function checkDump(hexData) {
         return {ok: false, size: blockSize, blockSize, errors}
     }
 
-    const total = sectorCount(blockSize)
+    const blockCount = blockSize / BLOCK_SIZE
+    const total = sectorCount(blockCount)
     for (let sector = 0; sector < total; sector++) {
-        const first = sectorFirstBlock(sector, blockSize) * BLOCK_SIZE
-        const trailer = first + 3 * BLOCK_SIZE
+        const first = sectorFirstBlock(sector, blockCount) * BLOCK_SIZE
+        const trailer = sectorTrailerBlock(sector, blockCount) * BLOCK_SIZE
         if (trailer + BLOCK_SIZE > bytes.length) break
         // BCC 只对扇区 0 有意义: 其余扇区的块 0 是数据块, 不是 UID 块
         if (sector === 0 && !isBccCorrect(bytes, first)) {
@@ -122,10 +134,11 @@ function fixDump(hexData) {
     }
     const out = Array.from(bytes)
     const fixed = []
-    const total = sectorCount(blockSize)
+    const blockCount = blockSize / BLOCK_SIZE
+    const total = sectorCount(blockCount)
     for (let sector = 0; sector < total; sector++) {
-        const first = sectorFirstBlock(sector, blockSize) * BLOCK_SIZE
-        const trailer = first + 3 * BLOCK_SIZE
+        const first = sectorFirstBlock(sector, blockCount) * BLOCK_SIZE
+        const trailer = sectorTrailerBlock(sector, blockCount) * BLOCK_SIZE
         if (trailer + BLOCK_SIZE > out.length) break
         // 只修扇区 0: 参考实现对全部扇区的块 0 都写 BCC, 那会破坏数据块
         if (sector === 0 && !isBccCorrect(out, first)) {
@@ -161,9 +174,10 @@ function dumpToKeyDict(hexData) {
         seen.add(key)
         keys.push(key)
     }
-    const total = sectorCount(blockSize)
+    const blockCount = blockSize / BLOCK_SIZE
+    const total = sectorCount(blockCount)
     for (let sector = 0; sector < total; sector++) {
-        const trailer = sectorFirstBlock(sector, blockSize) * BLOCK_SIZE + 3 * BLOCK_SIZE
+        const trailer = sectorTrailerBlock(sector, blockCount) * BLOCK_SIZE
         if (trailer + BLOCK_SIZE > bytes.length) break
         push(trailer)
         push(trailer + 10)
@@ -195,7 +209,7 @@ function bytesToHex(bytes) {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         checkDump, fixDump, dumpToKeyDict, hexToBytes, bytesToHex,
-        sectorGroupIndex, sectorFirstBlock, sectorCount,
+        sectorGroupIndex, sectorFirstBlock, sectorTrailerBlock, sectorCount,
         BLOCK_SIZE, VALID_SIZES, FIX_ACCESS_BYTES
     }
 }

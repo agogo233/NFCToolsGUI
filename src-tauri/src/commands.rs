@@ -267,6 +267,14 @@ fn run_task(
         return Err("device not connected".into());
     }
     if !tasks.lock().unwrap().claim() {
+        // 与上方"设备未连接"分支对称, 补一次 error 状态: 调用方通常在 run_task 之前
+        // 已 print_status 把指示灯置成 running, busy 时若不复位, 绿灯与走秒计时器会
+        // 一直停在被拒的这次操作上, 直到真在跑的任务结束才被动恢复。
+        app.emit(
+            "update-status",
+            json!({ "text": t(state, "indicator_error"), "indicator": "error" }),
+        )
+        .ok();
         show_error(app, state, "dialog_title_device_busy", "dialog_msg_running_task");
         return Err("device busy".into());
     }
@@ -586,11 +594,15 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
     };
     let Some(target) = target else {
         print_log(app, &t(state, "log_msg_not_saved"));
+        // 用户取消保存: 不留半途产物, 与下方 rename 失败一致地清掉临时 dump,
+        // 否则 data_dir/temp.mfd 会残留一份用户以为没保存的解卡数据。
+        std::fs::remove_file(&temp).ok();
         return;
     };
     match std::fs::rename(&temp, &target) {
         Err(_) => {
             print_log(app, &format!("\n\n{}\n", t(state, "log_msh_save_failed")));
+            std::fs::remove_file(&temp).ok();
             log_exit(app, state, 1);
         }
         Ok(_) => {
@@ -905,18 +917,11 @@ fn dec_full_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMan
         },
         &mut |_| {},
     );
-    // 设备没连或设备正忙: run_task 已经弹过错, 这里直接返回, 不再走下面的
-    // "未解出密钥" + exit_success, 否则会把错误状态覆盖成"运行完成"。
-    // 但要自己补一次 error 状态: run_task 的这两个前置分支只弹窗不复位指示灯
-    // (只有 spawn 失败才调 log_exit), 而上面 print_status 已把指示灯置成 running,
-    // 不补的话绿灯会常亮、走秒计时器一直不停。
+    // 设备没连或设备正忙: run_task 的两个前置失败分支都已弹窗并补发了 error 状态
+    // (见 run_task 里的 need_device / claim 分支), 这里只需提前返回, 不往下走
+    // "未解出密钥" + exit_success —— 那会把错误状态覆盖成"运行完成"。
     // mfcuk 自身失败 (Failed) 不在此列 —— 它的退出码不可靠 (解不出也返回 0), 只能看日志。
     if outcome.is_err() {
-        app.emit(
-            "update-status",
-            json!({ "text": t(state, "indicator_error"), "indicator": "error" }),
-        )
-        .ok();
         return;
     }
     // 无论任务成功、失败还是被用户停止, 已解析到的密钥都尽量保存

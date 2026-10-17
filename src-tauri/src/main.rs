@@ -26,7 +26,7 @@ fn main() {
             let state = app.state::<Mutex<AppState>>();
             let state = state.inner();
             {
-                let mut guard = state.lock().unwrap();
+                let mut guard = crate::state::lock(state);
                 guard.lang = i18n::detect_lang();
                 guard.dict_path = commands::dict_path();
             }
@@ -50,7 +50,7 @@ fn main() {
             }
             let busy = {
                 let tasks = window.state::<Mutex<TaskManager>>();
-                tasks.inner().lock().unwrap().is_running()
+                crate::state::lock(tasks.inner()).is_running()
             };
             if !busy {
                 return;
@@ -81,7 +81,7 @@ fn main() {
                 if still_exit {
                     {
                         let tasks = window.state::<Mutex<TaskManager>>();
-                        tasks.inner().lock().unwrap().kill();
+                        crate::state::lock(tasks.inner()).kill();
                     }
                     window.destroy().ok();
                 }
@@ -93,7 +93,7 @@ fn main() {
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 if let Some(tasks) = app.try_state::<Mutex<TaskManager>>() {
-                    tasks.inner().lock().unwrap().kill();
+                    crate::state::lock(tasks.inner()).kill();
                 }
             }
         });

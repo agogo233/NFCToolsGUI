@@ -1,4 +1,15 @@
 use std::path::PathBuf;
+use std::sync::{Mutex, MutexGuard};
+
+/// 取锁但不因毒化而失败。
+///
+/// std::sync::Mutex 没有清除毒化的公共 API: 持有者一旦 panic, 锁就永久毒化,
+/// 而毒化只体现在 lock() 的返回值上。这里若用 unwrap, 此后每个操作都会在加锁处
+/// 连环 panic, 整个应用表现为"点了没反应"。毒化只说明上次的持有者异常退出过,
+/// 数据本身仍可用, 所以取锁失败时继续拿守卫。
+pub fn lock<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
+    mutex.lock().unwrap_or_else(|err| err.into_inner())
+}
 
 #[derive(Default)]
 pub struct AppState {

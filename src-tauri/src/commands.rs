@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::i18n::t;
-use crate::state::AppState;
+use crate::state::{lock, AppState};
 use crate::task::{hidden_command, TaskManager};
 use crate::windows;
 
@@ -239,7 +239,9 @@ struct TaskClaim<'a>(&'a Mutex<TaskManager>);
 
 impl Drop for TaskClaim<'_> {
     fn drop(&mut self) {
-        self.0.lock().unwrap().release();
+        // 锁可能已因本次任务的 panic 毒化; 这里绝不能 panic —— 展开栈期间再 panic
+        // 会触发 double panic, 直接 abort 掉整个进程。见 crate::state::lock。
+        lock(self.0).release();
     }
 }
 
@@ -254,7 +256,7 @@ fn run_task(
     finish: &mut dyn FnMut(Option<i32>),
 ) -> Result<TaskOutcome, String> {
     let need_device = {
-        let guard = state.lock().unwrap();
+        let guard = lock(state);
         guard.current_device.is_none() || (!guard.device_connected && cmd != "nfc-list")
     };
     if need_device {
@@ -266,7 +268,7 @@ fn run_task(
         show_error(app, state, "dialog_title_error", "dialog_msg_not_connected_device");
         return Err("device not connected".into());
     }
-    if !tasks.lock().unwrap().claim() {
+    if !lock(tasks).claim() {
         // 与上方"设备未连接"分支对称, 补一次 error 状态: 调用方通常在 run_task 之前
         // 已 print_status 把指示灯置成 running, busy 时若不复位, 绿灯与走秒计时器会
         // 一直停在被拒的这次操作上, 直到真在跑的任务结束才被动恢复。
@@ -281,10 +283,7 @@ fn run_task(
     let _claim = TaskClaim(tasks);
     print_log(app, &format!("\n\n### {msg}\n"));
     let dir = data_dir(app);
-    let spawn_result = tasks
-        .lock()
-        .unwrap()
-        .spawn(app, &bin_dir(), cmd, args, &dir);
+    let spawn_result = lock(tasks).spawn(app, &bin_dir(), cmd, args, &dir);
     let mut rx = match spawn_result {
         Ok(rx) => rx,
         Err(err) => {
@@ -304,7 +303,7 @@ fn run_task(
         }
         on_line(&line);
     }
-    let slot = tasks.lock().unwrap().take_child();
+    let slot = lock(tasks).take_child();
     let Some(slot) = slot else {
         finish(None);
         return Ok(TaskOutcome::Killed);
@@ -315,7 +314,7 @@ fn run_task(
         .and_then(|child| child.wait().ok())
         .and_then(|status| status.code());
     finish(code);
-    let killed = tasks.lock().unwrap().killed.load(Ordering::SeqCst);
+    let killed = lock(tasks).killed.load(Ordering::SeqCst);
     let code = if killed { None } else { code };
     let Some(code) = code else {
         app.emit(
@@ -445,7 +444,7 @@ fn parse_uid(line: &str) -> Option<String> {
 }
 
 fn send_hard_nested_progress(app: &AppHandle, state: &Mutex<AppState>) {
-    let s = state.lock().unwrap();
+    let s = lock(state);
     if s.total_unknown_keys == 0 {
         return;
     }
@@ -510,7 +509,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
     let p = paths(app);
     check_key_file(&p.keys);
     let total = {
-        let mut s = state.lock().unwrap();
+        let mut s = lock(state);
         s.reset_task_state();
         let file_keys = std::fs::read_to_string(&p.keys)
             .map(|text| hex12_re().find_iter(&text).count())
@@ -536,7 +535,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
         &mfoc_msg,
         &mut |line| {
             {
-                let mut s = state.lock().unwrap();
+                let mut s = lock(state);
                 key_info_statistic(&mut s, line);
             }
             if let Some(uid) = parse_uid(line) {
@@ -545,7 +544,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
             update_mfoc_eta(&mut eta, line, app, state);
         },
         &mut |_code| {
-            let new_keys = state.lock().unwrap().new_keys.clone();
+            let new_keys = lock(state).new_keys.clone();
             save_keys(app, state, &new_keys);
             let size = std::fs::metadata(&p.temp_mfd).map(|m| m.len()).unwrap_or(0);
             if !p.temp_mfd.exists() {
@@ -581,7 +580,7 @@ fn mfoc(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, ar
     );
     let default_target = p.dump_files.join(&name);
     // 静默保存开启时不弹对话框, 直接落到默认路径; 弹窗被取消同样是 None, 但那时只提示未保存
-    let silent = state.lock().unwrap().silent_save_dump;
+    let silent = lock(state).silent_save_dump;
     let target = if silent {
         Some(default_target.clone())
     } else {
@@ -643,7 +642,7 @@ fn read_dump_phase(
 ) -> Result<TaskOutcome, String> {
     let p = paths(app);
     check_key_file(&p.keys);
-    state.lock().unwrap().reset_task_state();
+    lock(state).reset_task_state();
     let status_text = if save_dump_file {
         t(state, "indicator_backing_up_current_card")
     } else {
@@ -669,11 +668,11 @@ fn read_dump_phase(
         &args,
         msg,
         &mut |line| {
-            let mut s = state.lock().unwrap();
+            let mut s = lock(state);
             key_info_statistic(&mut s, line);
         },
         &mut |_code| {
-            let new_keys = state.lock().unwrap().new_keys.clone();
+            let new_keys = lock(state).new_keys.clone();
             save_keys(app, state, &new_keys);
             if save_dump_file {
                 let size = std::fs::metadata(&p.temp_mfd).map(|m| m.len()).unwrap_or(0);
@@ -790,6 +789,10 @@ fn dump_size_warning(bytes: &[u8]) -> bool {
 }
 
 fn format_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
+    // 格式化会重写整张卡并重置访问控制位, 且不像写卡那样先提示, 补一道二次确认。
+    if !confirm(app, state, "dialog_title_danger_operation", "dialog_msg_confirm_format_card") {
+        return;
+    }
     let p = paths(app);
     let detect_msg = t(state, "log_msg_read_ic_then_execute");
     if let Ok(TaskOutcome::Success) = read_dump_phase(app, state, tasks, true, &detect_msg) {
@@ -833,7 +836,7 @@ fn format_card(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManag
 fn detect_card_type(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
     let p = paths(app);
     check_key_file(&p.keys);
-    state.lock().unwrap().reset_task_state();
+    lock(state).reset_task_state();
     print_status(app, state, &t(state, "indicator_detecting_ic_card"));
     let args = vec!["-N".to_string(), format!("-f{}", p.keys.display())];
     let detect_msg = t(state, "log_msg_start_detect_card");
@@ -845,14 +848,14 @@ fn detect_card_type(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<Task
         &args,
         &detect_msg,
         &mut |line| {
-            let mut s = state.lock().unwrap();
+            let mut s = lock(state);
             key_info_statistic(&mut s, line);
         },
         &mut |_code| {},
     );
     if outcome == Ok(TaskOutcome::Success) {
         exit_success(app, state);
-        let count = state.lock().unwrap().unknown_key_info.len() as i64;
+        let count = lock(state).unknown_key_info.len() as i64;
         if count > 0 {
             app.emit(
                 "show-guidance",
@@ -1120,7 +1123,7 @@ fn phw_read_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMana
                 return;
             }
         };
-        state.lock().unwrap().phw_block0 = Some(block0.clone());
+        lock(state).phw_block0 = Some(block0.clone());
         app.emit_to(
             "phoneWristband",
             "update-phw-block0",
@@ -1132,7 +1135,7 @@ fn phw_read_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMana
 }
 
 fn phw_write_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>) {
-    let block0 = state.lock().unwrap().phw_block0.clone();
+    let block0 = lock(state).phw_block0.clone();
     let Some(block0) = block0 else {
         show_error(app, state, "dialog_title_error", "dialog_msg_need_phw_read_uid_first");
         return;
@@ -1171,7 +1174,7 @@ fn phw_write_uid(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMan
 }
 
 fn phw_write_data(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, arg: &Value) {
-    let block0 = state.lock().unwrap().phw_block0.clone();
+    let block0 = lock(state).phw_block0.clone();
     let Some(block0) = block0 else {
         show_error(app, state, "dialog_title_error", "dialog_msg_need_phw_read_uid_first");
         return;
@@ -1601,8 +1604,22 @@ fn merge_nonces(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskMana
     }
 }
 
+// 扇区号 -> 该扇区尾块(密钥/访问控制所在块)的块号。libnfc-collect 的第 2/4 参数
+// 是块号 (source/libnfc_collect/libnfc-collect.c:656,661), 4K 卡 32 号以后每扇区
+// 16 块, 尾块在 143 + (扇区-32)*16; 用 (扇区+1)*4-1 会把 33 号以后的扇区指到数据块
+// 上, 认证必然失败且不报错。32 号以前所有卡型都是 4 块, 所以不必知道卡容量。
+// 与 src/renderer/js/dumpTools.js 的 sectorTrailerBlockOf 保持同一布局,
+// test/parse/dumpTools.test.js 锚定 31->127、32->143、39->255。
+fn sector_trailer_block(sector: i64) -> i64 {
+    if sector < 32 {
+        sector * 4 + 3
+    } else {
+        128 + (sector - 32) * 16 + 15
+    }
+}
+
 fn hard_nested_payload(state: &Mutex<AppState>) -> Option<Value> {
-    let s = state.lock().unwrap();
+    let s = lock(state);
     let known = s.known_key_info.first()?;
     let unknown = s.unknown_key_info.first()?;
     Some(json!({
@@ -1653,15 +1670,15 @@ fn run_hard_nested_once(
 ) -> AutoStep {
     let p = paths(app);
     let mut cfg = cfg.clone();
-    cfg.known_sector = (cfg.known_sector + 1) * 4 - 1;
-    cfg.target_sector = (cfg.target_sector + 1) * 4 - 1;
+    cfg.known_sector = sector_trailer_block(cfg.known_sector);
+    cfg.target_sector = sector_trailer_block(cfg.target_sector);
     if reset_total && !cfg.auto_run {
-        let total = state.lock().unwrap().unknown_key_info.len() as i64;
-        state.lock().unwrap().total_unknown_keys = total;
+        let total = lock(state).unknown_key_info.len() as i64;
+        lock(state).total_unknown_keys = total;
     }
     send_hard_nested_progress(app, state);
     let progress = {
-        let s = state.lock().unwrap();
+        let s = lock(state);
         if cfg.auto_run {
             let index = s
                 .total_unknown_keys
@@ -1749,7 +1766,7 @@ fn run_hard_nested_once(
     }
     send_hard_nested_progress(app, state);
     let progress = {
-        let s = state.lock().unwrap();
+        let s = lock(state);
         let index = s
             .total_unknown_keys
             .saturating_sub(s.unknown_key_info.len() as i64)
@@ -1782,7 +1799,7 @@ fn run_hard_nested_once(
                 }
                 found_key = true;
                 save_keys(app, state, &[key.clone()]);
-                let mut s = state.lock().unwrap();
+                let mut s = lock(state);
                 if !s.unknown_key_info.is_empty()
                     && target_sector == Some(s.unknown_key_info[0].0)
                     && target_key_type.as_deref() == Some(s.unknown_key_info[0].1.as_str())
@@ -1827,7 +1844,7 @@ fn auto_hard_nested(
             _ => return,
         }
         let control = {
-            let s = state.lock().unwrap();
+            let s = lock(state);
             if s.known_key_info.is_empty() {
                 "abort-missing-known"
             } else if s.unknown_key_info.is_empty() {
@@ -1853,7 +1870,7 @@ fn auto_hard_nested(
             _ => {}
         }
         let cfg = {
-            let mut s = state.lock().unwrap();
+            let mut s = lock(state);
             // total_unknown_keys 会被每轮的 read_dump_phase 重置清零, 所以除首轮外
             // 归零也要重设, 否则第二轮起进度会显示 1/0 并冻结
             if from_user || s.total_unknown_keys == 0 {
@@ -1873,7 +1890,7 @@ fn auto_hard_nested(
         };
         from_user = false;
         let progress = {
-            let s = state.lock().unwrap();
+            let s = lock(state);
             let index = s
                 .total_unknown_keys
                 .saturating_sub(s.unknown_key_info.len() as i64)
@@ -1901,7 +1918,7 @@ fn auto_hard_nested(
 }
 
 fn open_dict_file(app: &AppHandle, state: &Mutex<AppState>) {
-    let current = state.lock().unwrap().dict_path.clone();
+    let current = lock(state).dict_path.clone();
     let directory = current
         .parent()
         .map(|dir| dir.to_path_buf())
@@ -1918,13 +1935,13 @@ fn open_dict_file(app: &AppHandle, state: &Mutex<AppState>) {
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_default();
-    state.lock().unwrap().dict_path = path;
+    lock(state).dict_path = path;
     app.emit_to("dictTest", "dict-file-name", &name).ok();
 }
 
 fn dict_test(app: &AppHandle, state: &Mutex<AppState>) {
     let payload = {
-        let s = state.lock().unwrap();
+        let s = lock(state);
         s.unknown_key_info
             .first()
             .map(|(sector, key_type)| json!({ "targetSector": sector, "targetKeyType": key_type }))
@@ -1941,7 +1958,21 @@ fn dict_test_config_done(
     let sector = arg.get("sector").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let key_type = arg.get("keyType").and_then(|v| v.as_str()).unwrap_or("A").to_string();
     let start = arg.get("startPosition").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let dict_path = state.lock().unwrap().dict_path.clone();
+    let dict_path = lock(state).dict_path.clone();
+    let Ok(target_sector) = sector.parse::<i64>() else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_dict_test_large_sector");
+        log_exit(app, state, 1);
+        return;
+    };
+    if !(0..32).contains(&target_sector) {
+        // nfc-mfdict 按每扇区恒 4 块定位 (source/nfc-mfdict/src/nfc-mfdict.c:391-393),
+        // 4K 大扇区会去认证邻近扇区, 并把它的密钥当成当前扇区输出 —— 一个看似可用
+        // 的错答案; 负数/非数字同样会被 atoi 静默当成 0 号扇区攻击。上游工具不认 4K,
+        // 这里直接拒绝而不是给错结果。
+        show_error(app, state, "dialog_title_error", "dialog_msg_dict_test_large_sector");
+        log_exit(app, state, 1);
+        return;
+    }
     print_status(app, state, &t(state, "indicator_testing_dictionary"));
     let args = vec![
         format!("-s{sector}"),
@@ -1949,7 +1980,6 @@ fn dict_test_config_done(
         format!("-l{start}"),
         format!("-d{}", dict_path.display()),
     ];
-    let target_sector: i64 = sector.parse().unwrap_or(i64::MIN);
     let dict_msg = t(state, "log_msg_start_test_dictionary");
     let outcome = run_task(
         app,
@@ -1967,7 +1997,7 @@ fn dict_test_config_done(
                     return;
                 }
                 save_keys(app, state, &[key]);
-                let mut s = state.lock().unwrap();
+                let mut s = lock(state);
                 if !s.unknown_key_info.is_empty()
                     && s.unknown_key_info[0].0 == target_sector
                     && s.unknown_key_info[0].1 == key_type
@@ -2061,7 +2091,7 @@ fn dump_editor_choose_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value
     let path = match arg.as_str() {
         Some(name) => PathBuf::from(name),
         None => {
-            let dict_dir = state.lock().unwrap().dict_path.clone();
+            let dict_dir = lock(state).dict_path.clone();
             let mut dialog = rfd::FileDialog::new()
                 .set_title(t(state, "dialog_title_choose_dump_file"))
                 .set_directory(&dict_dir)
@@ -2186,6 +2216,18 @@ fn open_dump_folder(app: &AppHandle) {
     let _ = hidden_command("explorer.exe").arg(&p.dump_files).spawn();
 }
 
+// 只接受纯文件名。带分隔符、绝对路径或 .. 的输入都能让 PathBuf::join 逃出 dumpfiles
+// 目录 (Windows 下反斜杠同样生效), 等于给页面脚本一个任意文件删改的原语。
+fn safe_file_name(name: &str) -> Option<String> {
+    if name.is_empty() || name.contains('/') || name.contains('\\') {
+        return None;
+    }
+    Path::new(name)
+        .file_name()
+        .map(|part| part.to_string_lossy().into_owned())
+        .filter(|part| !part.is_empty())
+}
+
 fn list_dump_files(app: &AppHandle) -> Vec<String> {
     let p = paths(app);
     std::fs::read_dir(&p.dump_files)
@@ -2219,10 +2261,15 @@ fn delete_dump(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
         .map(|array| {
             array
                 .iter()
-                .filter_map(|value| value.as_str().map(|text| text.to_string()))
+                .filter_map(|value| value.as_str())
+                .filter_map(safe_file_name)
                 .collect()
         })
         .unwrap_or_default();
+    if files.is_empty() {
+        show_error(app, state, "dialog_title_error", "dialog_msg_invalid_file_name");
+        return;
+    }
     let detail = files.join("\n");
     if !confirm_with_detail(
         app,
@@ -2248,6 +2295,14 @@ fn rename_dump_file(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     if old_name.is_empty() || new_name.is_empty() {
         return;
     }
+    let Some(old_name) = safe_file_name(old_name) else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_invalid_file_name");
+        return;
+    };
+    let Some(new_name) = safe_file_name(new_name) else {
+        show_error(app, state, "dialog_title_error", "dialog_msg_invalid_file_name");
+        return;
+    };
     let p = paths(app);
     if let Err(err) = std::fs::rename(
         p.dump_files.join(old_name),
@@ -2292,7 +2347,7 @@ fn save_log(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
 fn conn_usb_devices(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager>, arg: &Value) {
     let device = arg.as_str().map(|text| text.to_string());
     if device.as_deref() == Some(" ") {
-        state.lock().unwrap().current_device = None;
+        lock(state).current_device = None;
         app.emit("update-device-status", json!({ "state": "none" })).ok();
         return;
     }
@@ -2300,7 +2355,7 @@ fn conn_usb_devices(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<Task
         return;
     };
     print_status(app, state, &t(state, "indicator_connecting_device"));
-    state.lock().unwrap().current_device = Some(device.clone());
+    lock(state).current_device = Some(device.clone());
     app.emit(
         "update-device-status",
         json!({ "state": "connecting", "device": device }),
@@ -2316,12 +2371,12 @@ fn set_speed(app: &AppHandle, state: &Mutex<AppState>, tasks: &Mutex<TaskManager
     if !matches!(speed, 115200 | 230400 | 460800 | 921600) {
         return;
     }
-    state.lock().unwrap().current_speed = speed;
+    lock(state).current_speed = speed;
     crate::settings::save(app, state);
-    let device = state.lock().unwrap().current_device.clone();
+    let device = lock(state).current_device.clone();
     if let Some(device) = device {
         // 任务运行中跳过重连: 此时 set_nfc_config 会被"设备忙"拒绝并在主窗口提示连接失败
-        if tasks.lock().unwrap().is_running() {
+        if lock(tasks).is_running() {
             return;
         }
         // 速度只写进状态不会生效, 必须重写 libnfc.conf 并重连
@@ -2337,23 +2392,23 @@ fn set_setting(app: &AppHandle, state: &Mutex<AppState>, arg: &Value) {
     match key {
         "autoSelectDevice" => {
             if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
-                state.lock().unwrap().auto_select_device = value;
+                lock(state).auto_select_device = value;
             }
         }
         "silentSaveDump" => {
             if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
-                state.lock().unwrap().silent_save_dump = value;
+                lock(state).silent_save_dump = value;
             }
         }
         "fullEncEnabled" => {
             if let Some(value) = arg.get("value").and_then(|value| value.as_bool()) {
-                state.lock().unwrap().full_enc_enabled = value;
+                lock(state).full_enc_enabled = value;
             }
         }
         "theme" => {
             if let Some(value) = arg.get("value").and_then(|value| value.as_str()) {
                 if matches!(value, "light" | "dark" | "system") {
-                    state.lock().unwrap().theme = value.to_string();
+                    lock(state).theme = value.to_string();
                 }
             }
         }
@@ -2372,13 +2427,13 @@ fn set_nfc_config(
     device: &str,
 ) {
     app.emit("setting-nfc-config", "start").ok();
-    let speed = state.lock().unwrap().current_speed;
+    let speed = lock(state).current_speed;
     let dir = data_dir(app);
     let content = format!(
         "device.name = \"NFC_Device\"\ndevice.connstring = \"pn532_uart:{device}:{speed}\""
     );
     if std::fs::write(dir.join("libnfc.conf"), content).is_err() {
-        state.lock().unwrap().device_connected = false;
+        lock(state).device_connected = false;
         app.emit("setting-nfc-config", "failed").ok();
         app.emit(
             "update-device-status",
@@ -2414,7 +2469,7 @@ fn set_nfc_config(
         &msg,
         &mut |line| {
             if line.contains("NFC device: NFC_Device opened") {
-                state.lock().unwrap().device_connected = true;
+                lock(state).device_connected = true;
                 found = Some(true);
                 print_log(
                     app,
@@ -2422,7 +2477,7 @@ fn set_nfc_config(
                 );
             }
             if line.contains("Unable to open NFC device") {
-                state.lock().unwrap().device_connected = false;
+                lock(state).device_connected = false;
                 found = Some(false);
                 print_log(
                     app,
@@ -2438,7 +2493,7 @@ fn set_nfc_config(
     };
     let connected = match found {
         Some(value) => value,
-        None => state.lock().unwrap().device_connected,
+        None => lock(state).device_connected,
     };
     finish(connected);
     if outcome == TaskOutcome::Success {
@@ -2554,7 +2609,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
             let path = arg.get("path").and_then(|v| v.as_str());
             let p = paths(&app);
             if path.is_none() {
-                let dict_dir = state.lock().unwrap().dict_path.clone();
+                let dict_dir = lock(state).dict_path.clone();
                 let selected = rfd::FileDialog::new()
                     .set_title(t(&state, "dialog_title_choose_dump_file"))
                     .set_directory(&dict_dir)
@@ -2601,7 +2656,7 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
         "dump-history" => dump_history(&app, &state),
         "delete-dump" => delete_dump(&app, &state, &arg),
         "rename-dump-file" => rename_dump_file(&app, &state, &arg),
-        "cancel-task" => tasks.lock().unwrap().kill(),
+        "cancel-task" => lock(tasks).kill(),
         "save-log" => save_log(&app, &state, &arg),
         "open-about" => {
             windows::create_about_window(&app, &state).ok();
@@ -2612,10 +2667,49 @@ fn run_action(app: AppHandle, action: &str, arg: &Value) {
     }
 }
 
+fn command_panic(app: &AppHandle, action: &str, err: &(dyn std::any::Any + Send)) {
+    // 对齐 Electron src/main.js 的 uncaughtException: 一次异常不该让主进程之后
+    // 每个操作都失败。先复位任务占用与指示灯, 否则此后每次操作都会弹"设备忙"。
+    let state = app.state::<Mutex<AppState>>();
+    let tasks = app.state::<Mutex<TaskManager>>();
+    let state = state.inner();
+    let mut tasks = lock(tasks.inner());
+    tasks.kill();
+    tasks.release();
+    let message = err
+        .downcast_ref::<String>()
+        .map(|text| text.clone())
+        .or_else(|| err.downcast_ref::<&str>().map(|text| text.to_string()))
+        .unwrap_or_else(|| "panic".to_string());
+    print_log(
+        app,
+        &format!(
+            "\n{} action={} {}\n",
+            t(state, "log_msg_internal_error"),
+            action,
+            message
+        ),
+    );
+    log_exit(app, state, 1);
+}
+
 #[tauri::command]
 pub fn exec_action(action: String, arg: Option<Value>, app: AppHandle) {
     let arg = arg.unwrap_or(Value::Null);
-    std::thread::spawn(move || run_action(app, &action, &arg));
+    std::thread::spawn(move || {
+        let recovery_app = app.clone();
+        let recovery_action = action.clone();
+        // 命令都在独立线程跑, panic 不会被 Tauri 捕获, 会静默丢在后台线程里。
+        // 收住它并复位状态, 对齐 Electron src/main.js 的 uncaughtException。
+        // AssertUnwindSafe: AppHandle 实现了 !UnwindSafe (内部含 Box<dyn Plugin>),
+        // 直接 move 捕获会让闭包不满足 catch_unwind 的约束。
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            run_action(app, &action, &arg)
+        }));
+        if let Err(err) = result {
+            command_panic(&recovery_app, &recovery_action, &err);
+        }
+    });
 }
 
 #[tauri::command]

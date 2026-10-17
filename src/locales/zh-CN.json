@@ -34,7 +34,10 @@
   "dialog_msg_are_you_sure_to_delete_these_dumps": "你确定要删除这些转储文件吗？",
   "dialog_msg_confirm_write_uid": "该操作将会改写UFUID卡片的0块（UID）！！！\n改错0块后卡片可能变砖！\n即将写入的0块：\n",
   "dialog_msg_invalid_uid_input": "卡号格式不正确，请输入 8 位（4字节UID）或 32 位（完整0块）十六进制",
+  "dialog_msg_invalid_file_name": "文件名不合法，请使用不带路径的纯文件名",
+  "dialog_msg_dict_test_large_sector": "字典攻击工具只支持 32 号以内的扇区，4K 卡请选择 32 号以下的扇区",
   "dialog_msg_confirm_write_dump": "确定要将此转储文件写入卡片吗？",
+  "dialog_msg_confirm_format_card": "该操作将先读卡，再用读到的内容重写整张卡，每个扇区的访问控制位会被重置为默认值。\n你确定要继续吗？",
   "dialog_msg_write_bad_size": "该文件不是有效的卡数据（应为 1024、2048 或 4096 字节），写入可能损坏卡片。",
 
   "dialog_button_cancel" : "取消",

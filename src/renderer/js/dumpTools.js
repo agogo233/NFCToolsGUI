@@ -31,6 +31,26 @@ function sectorTrailerBlock(sector, blockCount) {
     return sector < 32 ? first + 3 : first + 15
 }
 
+// 传给工具的扇区尾块块号 (libnfc-collect 第 2/4 参数收块号, 不是扇区号)。
+// 与 sectorTrailerBlock 的 4K 分支同一条布局: 32 号以后每扇区 16 块, 尾块在
+// 143 + (扇区-32)*16。这里不需要块数 —— 32 号以前的扇区在所有卡型上都是 4 块,
+// 只有 32 号以后才分卡型。Electron 的 src/command.js 与 Tauri 的
+// sector_trailer_block 都按这一条布局实现, 两边必须一致。
+function sectorTrailerBlockOf(sector) {
+    return sector < 32 ? sector * 4 + 3 : 143 + (sector - 32) * 16
+}
+
+// 只接受纯文件名: 拒绝空名、"."、 ".." 以及任何带分隔符的输入。Electron 主进程
+// (src/command.js) 删除/重命名 dump 前必须经过这里 —— path.join 遇到绝对路径或
+// ".." 段会逃出 dumpfiles 目录, 等于给脚本一个任意文件删改的原语。
+// 与 src-tauri 的 safe_file_name 保持同一规则, 两个端口任一侧回退都会被
+// test/parse/dumpTools.test.js 第 14 节的断言抓住。
+function safeFileName(name) {
+    if (name === "" || name === "." || name === "..") return null
+    if (name.includes("/") || name.includes("\\")) return null
+    return name
+}
+
 // 扇区序号 -> 编辑器里的分组下标。编辑器固定按每 4 行分一组, 与实际扇区大小无关,
 // 所以大卡上两者并不一一对应 (4K 卡的 32 号以后每扇区 16 块, 分组下标要靠这个换算)。
 // 要指向尾块所在的那一组 (密钥/访问位错在那一组), 而不是首块所在的那一组。
@@ -244,6 +264,7 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         checkDump, fixDump, dumpToKeyDict, hexToBytes, bytesToHex,
         sectorGroupIndex, sectorFirstBlock, sectorTrailerBlock, sectorCount,
+        sectorTrailerBlockOf, safeFileName,
         groupSector, groupHasTrailer, groupLabel,
         BLOCK_SIZE, VALID_SIZES, FIX_ACCESS_BYTES
     }

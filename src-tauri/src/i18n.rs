@@ -27,7 +27,7 @@ fn locale_map(lang: &str) -> &serde_json::Map<String, serde_json::Value> {
 }
 
 pub fn t(state: &Mutex<AppState>, key: &str) -> String {
-    let lang = state.lock().unwrap().lang.clone();
+    let lang = crate::state::lock(state).lang.clone();
     locale_map(&lang)
         .get(key)
         .and_then(|value| value.as_str())

@@ -7,6 +7,7 @@ const { SerialPort } = require('serialport')
 const path = require("path")
 const { i18n } = require('./i18n')
 const { createKeyInfoParser, createLineSplitter } = require('./keyParser')
+const { sectorTrailerBlockOf, safeFileName } = require('./renderer/js/dumpTools')
 
 const {
     createDumpHistoryWindow,
@@ -145,6 +146,13 @@ const actions = {
 
     // 格式化
     "format-card": () => {
+        // 格式化会重写整张卡并重置访问控制位, 且不像写卡那样先提示, 补一道二次确认
+        const confirmFormat = dialog.showMessageBoxSync({
+            type: 'warning',
+            buttons: [i18n("dialog_button_ok"), i18n("dialog_button_cancel")],
+            message: i18n("dialog_msg_confirm_format_card"),
+        });
+        if (confirmFormat !== 0) return
         readICThenExec(
             i18n("log_msg_start_format_card"), i18n("indicator_formatting_ic_card"), true,
             "nfc-mfclassic", ["f", "A", "u", tempMFDFilePath, tempMFDFilePath, "f"]
@@ -280,8 +288,9 @@ const actions = {
     "run-hard-nested": (configs) => {
         let uid, sector, keyType
         const nextCollectLine = createLineSplitter()
-        configs.knownSector = (parseInt(configs.knownSector) + 1) * 4 - 1
-        configs.targetSector = (parseInt(configs.targetSector) + 1) * 4 - 1
+        // 块号换算规则见 dumpTools.sectorTrailerBlockOf (4K 卡 32 号以后每扇区 16 块)
+        configs.knownSector = sectorTrailerBlockOf(parseInt(configs.knownSector))
+        configs.targetSector = sectorTrailerBlockOf(parseInt(configs.targetSector))
         if (!configs.autoRun) totalUnknownKeys = unknownKeyInfo.length
 
         sendHardNestedProgress()
@@ -516,16 +525,19 @@ const actions = {
     },
     // 删除历史记录
     "delete-dump": (files) => {
+        // 只放行纯文件名, 与 Tauri 端 safe_file_name 同一规则 (见 dumpTools.safeFileName)
+        const valid = files.map(safeFileName).filter((name) => name !== null)
+        if (valid.length === 0) return
         // 弹出确认框
         const confirmDelete = dialog.showMessageBoxSync({
             type: 'question',
             buttons: [i18n("dialog_button_ok"), i18n("dialog_button_cancel")],
             message: i18n("dialog_msg_are_you_sure_to_delete_these_dumps"),
-            detail: files.join('\n'),
+            detail: valid.join('\n'),
         });
 
         if (confirmDelete === 0) { // 用户点击 Yes
-            files.forEach((file) => {
+            valid.forEach((file) => {
                 fs.unlink(path.join(dumpsFolder, file), (err) => {
                     if (err) {reportIOError(err); return}
                     updateDumpFiles()
@@ -536,7 +548,10 @@ const actions = {
     // 重命名
     "rename-dump-file": (fileObj) => {
         const { oldName, newName } = fileObj;
-        fs.rename(path.join(dumpsFolder, oldName), path.join(dumpsFolder, newName), (err) => {
+        const oldValid = safeFileName(oldName)
+        const newValid = safeFileName(newName)
+        if (oldValid === null || newValid === null) return
+        fs.rename(path.join(dumpsFolder, oldValid), path.join(dumpsFolder, newValid), (err) => {
             if (err) {reportIOError(err); return}
             updateDumpFiles()
         });

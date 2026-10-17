@@ -17,7 +17,7 @@ pub fn load(app: &tauri::AppHandle, state: &std::sync::Mutex<AppState>) {
     let Ok(value) = serde_json::from_str::<Value>(&text) else {
         return;
     };
-    let mut guard = state.lock().unwrap();
+    let mut guard = crate::state::lock(state);
     if let Some(speed) = value.get("speed").and_then(Value::as_u64) {
         if matches!(speed, 115200 | 230400 | 460800 | 921600) {
             guard.current_speed = speed as u32;
@@ -40,7 +40,7 @@ pub fn load(app: &tauri::AppHandle, state: &std::sync::Mutex<AppState>) {
 }
 
 pub fn save(app: &tauri::AppHandle, state: &std::sync::Mutex<AppState>) {
-    let guard = state.lock().unwrap();
+    let guard = crate::state::lock(state);
     let value = json!({
         "speed": guard.current_speed,
         "theme": guard.theme,
@@ -58,7 +58,7 @@ pub fn save(app: &tauri::AppHandle, state: &std::sync::Mutex<AppState>) {
 
 /// 设置窗口打开时下发的当前值
 pub fn payload(state: &std::sync::Mutex<AppState>) -> Value {
-    let guard = state.lock().unwrap();
+    let guard = crate::state::lock(state);
     json!({
         "speed": guard.current_speed,
         "theme": guard.theme,

@@ -4,6 +4,7 @@
 const {
     checkDump, fixDump, dumpToKeyDict, hexToBytes, bytesToHex,
     sectorTrailerBlock, sectorGroupIndex, sectorCount,
+    sectorTrailerBlockOf, safeFileName,
     groupSector, groupHasTrailer, groupLabel,
     BLOCK_SIZE, FIX_ACCESS_BYTES
 } = require("../../src/renderer/js/dumpTools")
@@ -320,6 +321,42 @@ console.log("[parse] 12. 编辑器分组与真实扇区的对应")
     eq("超过 4K 的输入退回组序号",
         [0, 32, 63].map((g) => groupLabel(g, 8192)), ["0", "32", "63"])
     eq("0 字节不抛异常", groupLabel(0, 0), "0")
+}
+
+console.log("[parse] 13. 传给工具的扇区尾块块号")
+{
+    // 硬嵌套把扇区号换算成块号传给 libnfc-collect (它收块号, 不是扇区号)。
+    // 4K 卡 32 号以后每扇区 16 块, 早先用 (扇区+1)*4-1 会把 33 号以后的扇区指到
+    // 数据块上, 认证必然失败且不报错。这几个绝对块号是跨端口的共同锚点:
+    // src-tauri 的 sector_trailer_block 必须与此一致, 两边任一回退都会在这里被抓到。
+    eq("扇区 0 是块 3", sectorTrailerBlockOf(0), 3)
+    eq("扇区 31 是块 127", sectorTrailerBlockOf(31), 127)
+    eq("扇区 32 是块 143", sectorTrailerBlockOf(32), 143)
+    eq("扇区 33 是块 159", sectorTrailerBlockOf(33), 159)
+    eq("扇区 39 是块 255", sectorTrailerBlockOf(39), 255)
+
+    // 同一扇区两条路径必须取到同一块: 体检/修复走 sectorTrailerBlock,
+    // 采集走本函数, 不一致就会一个说数据块、一个说密钥块
+    const BC = 4096 / BLOCK_SIZE
+    eq("与 sectorTrailerBlock 的 4K 结果一致",
+        [0, 31, 32, 33, 35, 39].map((s) => sectorTrailerBlockOf(s)),
+        [0, 31, 32, 33, 35, 39].map((s) => sectorTrailerBlock(s, BC)))
+}
+
+console.log("[parse] 14. dump 文件名的安全校验")
+{
+    // 删除/重命名 dump 前必须只放行纯文件名。path.join 遇到绝对路径或 .. 段会逃出
+    // dumpfiles 目录 (Windows 下反斜杠同样生效); 空名、"."、 ".." 都无法定位到文件。
+    // 与 src-tauri 的 safe_file_name 保持同一规则。
+    eq("正常文件名放行", safeFileName("a.mfd"), "a.mfd")
+    eq("相对路径拒绝", safeFileName("..\\evil.mfd"), null)
+    eq("斜杠路径拒绝", safeFileName("../evil.mfd"), null)
+    eq("反斜杠路径拒绝", safeFileName("..\\..\\x.mfd"), null)
+    eq("绝对路径拒绝", safeFileName("C:\\x.mfd"), null)
+    eq("空名拒绝", safeFileName(""), null)
+    eq("'.'拒绝", safeFileName("."), null)
+    eq("'..'拒绝", safeFileName(".."), null)
+    eq("带目录拒绝", safeFileName("sub/a.mfd"), null)
 }
 
 console.log(failed === 0 ? "[parse-dump] PASSED" : `[parse-dump] FAILED (${failed})`)

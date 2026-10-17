@@ -12,7 +12,7 @@ const BRIDGE_JS: &str = include_str!("embedded.js");
 fn init_script(state: &Mutex<AppState>) -> String {
     // settings::payload 会自己加锁, 这里必须先放掉 guard 再取, 否则 Mutex 不可重入会死锁
     let (lang, theme) = {
-        let guard = state.lock().unwrap();
+        let guard = crate::state::lock(state);
         (guard.lang.clone(), guard.theme.clone())
     };
     let settings = crate::settings::payload(state);
